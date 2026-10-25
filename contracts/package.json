@@ -1,0 +1,19 @@
+{
+  "name": "daoguard-contracts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "DAOGuard guarded execution, governance and registry contracts (local demo chain only)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node --hostname 127.0.0.1 --port 8545",
+    "export": "node scripts/export-artifacts.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "hardhat": "^2.29.1"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/data/
+backend/.env
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+frontend/dist/
+.playwright-mcp/
+*.log

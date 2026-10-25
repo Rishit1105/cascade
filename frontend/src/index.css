@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens. Colours are RGB triplets so Tailwind opacity modifiers work (bg-primary/10). */
+:root,
+[data-theme="light"] {
+  --bg: 244 246 248;
+  --surface: 255 255 255;
+  --subtle: 241 244 246;
+  --line: 223 228 233;
+  --line-strong: 201 209 217;
+  --fg: 23 33 43;
+  --muted: 102 116 130;
+  --faint: 148 160 172;
+  --primary: 22 138 120;
+  --warning: 183 121 31;
+  --danger: 196 61 75;
+  --info: 53 106 195;
+  --ink: 18 26 34;
+  --node: 28 39 49;
+  --edge: 184 194 204;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: 12 16 20;
+  --surface: 20 26 32;
+  --subtle: 26 33 40;
+  --line: 37 46 55;
+  --line-strong: 54 66 78;
+  --fg: 230 234 238;
+  --muted: 140 152 165;
+  --faint: 98 110 122;
+  --primary: 43 179 154;
+  --warning: 224 164 58;
+  --danger: 240 96 110;
+  --info: 108 155 234;
+  --ink: 8 11 14;
+  --node: 46 58 68;
+  --edge: 70 84 98;
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans text-base antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+  }
+  *:focus-visible {
+    outline: 2px solid rgb(var(--primary));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: rgb(var(--primary) / 0.22);
+  }
+  /* Grid items default to min-width:auto and can push the page wider than the viewport. */
+  .grid > * {
+    min-width: 0;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-line bg-surface shadow-card;
+  }
+  .panel-head {
+    @apply flex items-center justify-between gap-3 border-b border-line px-4 py-3;
+  }
+  .panel-title {
+    @apply text-[13.5px] font-semibold text-fg;
+  }
+  .label {
+    @apply text-2xs font-semibold uppercase tracking-[0.06em] text-muted;
+  }
+  .kbd {
+    @apply rounded border border-line bg-subtle px-1.5 py-0.5 font-mono text-2xs text-muted;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--line-strong)) transparent;
+  }
+  .input {
+    @apply h-8 w-full rounded-lg border border-line bg-surface px-2.5 text-sm text-fg placeholder:text-faint transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+  .textarea {
+    @apply w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-fg placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+  .table-base {
+    @apply w-full text-left text-sm;
+  }
+  .table-base th {
+    @apply border-b border-line bg-subtle/60 px-3 py-2 text-2xs font-semibold uppercase tracking-[0.05em] text-muted;
+  }
+  .table-base td {
+    @apply border-b border-line px-3 py-2.5 align-top;
+  }
+  .table-base tr:last-child td {
+    @apply border-b-0;
+  }
+  .mark-intent {
+    @apply rounded-[3px] bg-warning/20 px-0.5 text-fg;
+  }
+  .mark-violated {
+    @apply rounded-[3px] bg-danger/15 px-0.5 text-fg underline decoration-danger/60 decoration-2 underline-offset-2;
+  }
+  .mark-consistent {
+    @apply rounded-[3px] bg-primary/15 px-0.5 text-fg;
+  }
+}
+
+.capitalize-first::first-letter {
+  text-transform: uppercase;
+}
+
+/* Recharts tooltips follow the theme. */
+.recharts-default-tooltip {
+  background: rgb(var(--surface)) !important;
+  border: 1px solid rgb(var(--line)) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px -8px rgba(16, 24, 40, 0.2);
+  font-size: 12px;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: rgb(var(--muted));
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
