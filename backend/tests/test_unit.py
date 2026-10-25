@@ -218,3 +218,48 @@ def test_concentration_metrics():
 def test_bayesian_update_is_transparent():
     assert _posterior(0.1, []) == pytest.approx(0.1)
     assert _posterior(0.1, [{"lr": 9.0}]) == pytest.approx(0.5)
+
+
+def test_contract_call_encoding_is_exact_and_strict():
+    from app.services.builder import encode_contract_call
+
+    data = encode_contract_call("setFeeBps(uint16)", ["30"], "a")
+    assert data == "0x" + keccak(text="setFeeBps(uint16)")[:4].hex() + abi_encode(["uint16"], [30]).hex()
+    multi = encode_contract_call("f(address,bool,bytes32,int8)", [WALLET_A.lower(), "true", "0x" + "11" * 32, "-5"], "a")
+    assert multi[10:] == abi_encode(["address", "bool", "bytes32", "int8"], [WALLET_A, True, b"\x11" * 32, -5]).hex()
+    for sig, args, path in [
+        ("setFeeBps(uint16)", ["70000"], "a.args[0]"),  # out of range for uint16
+        ("setFeeBps(uint16)", ["1", "2"], "a.args"),  # wrong arity
+        ("batch(address[])", [WALLET_A], "a.signature"),  # arrays need raw calldata
+        ("not a signature", [], "a.signature"),
+        ("f(bytes4)", ["0x1234"], "a.args[0]"),  # wrong fixed-bytes length
+        ("f(bool)", ["yes"], "a.args[0]"),
+    ]:
+        with pytest.raises(PayloadError) as exc:
+            encode_contract_call(sig, args, "a")
+        assert exc.value.path == path
+
+
+def test_live_bus_delivers_across_threads_and_keeps_history_per_kind():
+    import asyncio
+    import threading
+
+    from app.services.live import LiveBus
+
+    bus = LiveBus(history=3)
+
+    async def scenario():
+        queue = bus.subscribe()
+        threading.Thread(target=lambda: bus.publish("activity", {"proposal_id": "GOV-1", "stage": "snapshot"})).start()
+        msg = await asyncio.wait_for(queue.get(), timeout=2)
+        bus.unsubscribe(queue)
+        return msg
+
+    msg = asyncio.run(scenario())
+    assert msg["kind"] == "activity" and msg["stage"] == "snapshot" and msg["id"] == 1
+    for i in range(5):  # a burst of ledger events must not evict activity history
+        bus.publish("ledger", {"proposal_id": "GOV-2", "event": {"proposal_id": "GOV-2", "seq": i}})
+    assert [m["stage"] for m in bus.recent(kind="activity")] == ["snapshot"]
+    assert len(bus.recent(kind="ledger")) == 3
+    assert [m["id"] for m in bus.recent(proposal_id="GOV-2")] == [4, 5, 6]
+    assert bus.subscribers == 0

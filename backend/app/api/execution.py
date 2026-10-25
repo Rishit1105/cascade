@@ -9,14 +9,14 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..errors import Conflict, NotFound, ValidationFailed
 from ..models import ExecutionAttempt, ExecutionCheck, Simulation
-from ..services import audit, execution, proposals
+from ..services import audit, builder, execution, proposals
 from ..services.manifests import PayloadError, manifest_actions, parse_payload
 from ..services.sentinel import declared_text, simulation_findings
 from ..services.findings import sync_findings
 from ..services.simulation import run_simulation
 from ..services.simulation import serialize as serialize_sim
 from .deps import actor, require_ready
-from .schemas import DisputeIn, HaltIn, PayloadRequest, SimulationRequest
+from .schemas import BuilderPreviewIn, DisputeIn, HaltIn, PayloadRequest, SimulationRequest
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_ready)])
 
@@ -50,6 +50,18 @@ def scenarios(proposal_id: str, db: Session = Depends(get_db)) -> dict[str, Any]
 def scenario_payload(proposal_id: str, scenario: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     p = proposals.get_proposal(db, proposal_id)
     return {"scenario": scenario, "payload": execution.scenario_payload(p, scenario)}
+
+
+@router.get("/address-book")
+def address_book(db: Session = Depends(get_db)) -> dict[str, Any]:
+    return builder.address_book(db)
+
+
+@router.post("/proposals/{proposal_id}/manifest/preview")
+def manifest_preview(proposal_id: str, body: BuilderPreviewIn, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Live manifest builder: encode, hash and preflight a payload without storing or sending anything."""
+    p = proposals.get_proposal(db, proposal_id)
+    return builder.preview(db, p, body.model_dump(exclude_none=True))
 
 
 @router.post("/proposals/{proposal_id}/execution-checks", status_code=201)

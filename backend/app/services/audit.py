@@ -22,6 +22,7 @@ from ..clock import from_timestamp, iso, utcnow
 from ..db import SessionLocal
 from ..models import AuditAnchor, AuditEvent
 from ..runtime import runtime
+from . import live
 from .canonical import canonical_bytes, sha256_hex
 
 log = logging.getLogger("daoguard.audit")
@@ -99,9 +100,11 @@ def record(
             ev.event_hash = compute_event_hash(ev, prev_hash)
             db.add(ev)
             db.commit()
-            return serialize(ev)
+            out = serialize(ev)
         finally:
             db.close()
+    live.bus.publish("ledger", {"proposal_id": proposal_id, "event": out})
+    return out
 
 
 def serialize(ev: AuditEvent) -> dict[str, Any]:

@@ -39,7 +39,8 @@ def _posterior(prior: float, items: list[dict[str, Any]]) -> float:
 def evaluate(db: Session, p: Proposal, gov_state: dict[str, Any] | None = None) -> dict[str, Any]:
     model = get_policy(db)["risk_model"]
     lrs, priors = model["likelihood_ratios"], model["priors"]
-    findings = active_findings(db, p.id)
+    # Resolved (e.g. by an accepted proposer answer) and dismissed findings no longer count as evidence of an issue.
+    findings = [f for f in active_findings(db, p.id) if f.status not in ("resolved", "dismissed")]
 
     def item(key: str, label: str, source: str | None = None) -> dict[str, Any]:
         lr = float(lrs.get(key, 1.0))

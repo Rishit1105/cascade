@@ -1,4 +1,4 @@
-import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { AlertTriangle, Check, CheckCircle2, CircleDashed, Copy, Info, Loader2, OctagonX, ShieldAlert, XCircle } from "lucide-react";
 import { cx, shortAddr, shortHash } from "../lib/format";
 import { useApp } from "../lib/app";
@@ -161,6 +161,7 @@ export function Panel({
   bodyClassName,
   icon,
   dark,
+  tour,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -170,9 +171,11 @@ export function Panel({
   bodyClassName?: string;
   icon?: ReactNode;
   dark?: boolean;
+  /** Anchor for the guided tour. */
+  tour?: string;
 }) {
   return (
-    <section className={cx(dark ? "rounded-xl border border-ink bg-ink text-white shadow-card dark:border-line" : "panel", "flex min-w-0 flex-col", className)}>
+    <section data-tour={tour} className={cx(dark ? "rounded-xl border border-ink bg-ink text-white shadow-card dark:border-line" : "panel", "flex min-w-0 flex-col", className)}>
       {(title || actions) && (
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pb-2.5 pt-3.5">
           <div className="min-w-0 flex-1 basis-[220px]">
@@ -206,8 +209,14 @@ export function PageHeader({ title, subtitle, actions, children }: { title: Reac
 }
 
 export function Tabs<T extends string>({ tabs, value, onChange, className }: { tabs: Array<{ id: T; label: ReactNode; count?: number }>; value: T; onChange: (v: T) => void; className?: string }) {
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // When the tabs overflow, keep the selected one visible (it may have been chosen from a link).
+    const el = list.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (el && list.current) list.current.scrollLeft = Math.max(0, el.offsetLeft + el.offsetWidth - list.current.clientWidth + 8) || 0;
+  }, [value]);
   return (
-    <div role="tablist" className={cx("flex items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-line scroll-thin", className)}>
+    <div ref={list} role="tablist" className={cx("flex items-center gap-0.5 overflow-x-auto overflow-y-hidden border-b border-line scroll-thin", className)}>
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -215,7 +224,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cx(
-            "relative -mb-px inline-flex h-9 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors",
+            "relative -mb-px inline-flex h-9 items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 text-sm font-medium transition-colors",
             value === t.id ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg",
           )}
         >

@@ -97,6 +97,34 @@ class ChallengeIn(Strict):
     counter_evidence: list[dict[str, Any]] = []
 
 
+class BuilderPreviewIn(Strict):
+    """Either a full executable payload, or a context plus structured action specs."""
+
+    payload: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    actions: list[Any] | None = None
+
+
+class QuestionIn(Strict):
+    text: str = Field(min_length=10, max_length=2000)
+    finding_id: str | None = None
+
+
+class AnswerIn(Strict):
+    text: str = Field(min_length=10, max_length=4000)
+    evidence_name: str | None = Field(default=None, max_length=200)
+    evidence_text: str | None = Field(default=None, max_length=200_000)
+
+
+class AnswerReviewIn(Strict):
+    decision: Literal["accept", "needs_more"]
+    note: str = Field(default="", max_length=2000)
+
+
+class WithdrawIn(Strict):
+    note: str = Field(default="", max_length=1000)
+
+
 class ChallengeResponseIn(Strict):
     decision: Literal["upheld", "rejected"]
     response: str = Field(min_length=8, max_length=2000)

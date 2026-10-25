@@ -363,3 +363,25 @@ class Annotation(Base):
     evidence_level: Mapped[str] = mapped_column(String(24), default="unverified_lead")
     created_by: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class Question(Base):
+    """A reviewer's question to the proposer, usually about a missing-information finding.
+
+    The thread is append-only: question, signed proposer answers, reviewer follow-ups. Every entry
+    is also written to the hash-chained audit ledger, so an edited thread would no longer match it.
+    """
+
+    __tablename__ = "questions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("proposals.id", ondelete="CASCADE"), index=True)
+    finding_id: Mapped[str | None] = mapped_column(ForeignKey("findings.id", ondelete="SET NULL"), nullable=True)
+    rule_id: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=0)  # proposal version the question was asked against
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | answered | needs_more | accepted | withdrawn
+    thread: Mapped[list] = mapped_column(JSON, default=list)
+    asked_by: Mapped[str] = mapped_column(String(120))
+    asked_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

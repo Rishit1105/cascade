@@ -1,6 +1,6 @@
 /* React Query hooks for every resource plus a mutation helper with toasts and invalidation. */
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { api, ApiError, qs, type Alert, type AuditEvent, type EvaluationChain, type ExecutionAttempt, type ExecutionCheck, type Finding, type GovernanceState, type GraphEdge, type GraphNode, type Health, type ProposalDetail, type ProposalItem, type Simulation } from "./api";
+import { api, ApiError, qs, type Alert, type AuditEvent, type EvaluationChain, type ExecutionAttempt, type ExecutionCheck, type Finding, type GovernanceState, type GraphEdge, type GraphNode, type Health, type ProposalDetail, type ProposalItem, type QuestionsOverview, type Simulation } from "./api";
 import { useApp, type ToastTone } from "./app";
 
 export const useHealth = () =>
@@ -69,6 +69,8 @@ export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () 
 export const useTreasuryOverview = () => useQuery({ queryKey: ["treasury-overview"], queryFn: () => api.get<any>("/treasury") });
 export const useVersionDiff = (id?: string, from?: number, to?: string) =>
   useQuery({ queryKey: ["diff", id, from, to], queryFn: () => api.get<any>(`/proposals/${id}/versions/diff${qs({ from, to })}`), enabled: !!id && !!from });
+export const useQuestions = (id?: string) =>
+  useQuery({ queryKey: ["questions", id], queryFn: () => api.get<QuestionsOverview>(`/proposals/${id}/questions`), enabled: !!id });
 export const useAnchors = () => useQuery({ queryKey: ["anchors"], queryFn: () => api.get<{ items: any[] }>("/audit/anchors").then((r) => r.items) });
 
 /** Mutation with success/error toasts and cache invalidation of everything chain-derived. */
@@ -81,7 +83,7 @@ export function useAction<TVars, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: (result) => {
-      const keys = opts.invalidate ?? [["proposal"], ["proposals"], ["governance"], ["evaluation"], ["overview"], ["audit"], ["alerts"], ["notifications"], ["findings"], ["attempts"], ["checks"], ["simulations"], ["graph"], ["conflicts"], ["voting"], ["delegates"], ["manifest"], ["dependencies"], ["treasury"]];
+      const keys = opts.invalidate ?? [["proposal"], ["proposals"], ["governance"], ["evaluation"], ["overview"], ["audit"], ["alerts"], ["notifications"], ["findings"], ["attempts"], ["checks"], ["simulations"], ["graph"], ["conflicts"], ["voting"], ["delegates"], ["manifest"], ["dependencies"], ["treasury"], ["questions"]];
       keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
       if (opts.success && !opts.quiet) toast(opts.tone?.(result) ?? "success", typeof opts.success === "function" ? opts.success(result) : opts.success);
       opts.onSuccess?.(result);

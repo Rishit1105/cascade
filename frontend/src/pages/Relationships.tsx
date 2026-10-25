@@ -92,6 +92,7 @@ export default function Relationships() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel
+          tour="graph"
           title={view === "graph" ? "Wallet relationship mapping" : "Relationships (table)"}
           bodyClassName="px-0 pb-0"
           actions={<Tabs value={view} onChange={setView} className="border-0" tabs={[{ id: "graph", label: "Graph" }, { id: "table", label: "Table" }]} />}

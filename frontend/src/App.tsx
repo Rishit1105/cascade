@@ -2,6 +2,9 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppProvider } from "./lib/app";
+import { LiveProvider } from "./lib/live";
+import { TourProvider } from "./lib/tour";
+import { TourOverlay } from "./components/Tour";
 import { useHealth } from "./lib/queries";
 import { AppShell, BootScreen } from "./components/layout";
 import { Inspectors } from "./components/inspectors";
@@ -40,26 +43,31 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AppProvider>
           <Gate>
-            <AppShell>
-              <Suspense fallback={<LoadingBlock rows={8} />}>
-                <Routes>
-                  <Route path="/" element={<Overview />} />
-                  <Route path="/proposals" element={<Proposals />} />
-                  <Route path="/proposals/:id" element={<Proposals />} />
-                  <Route path="/relationships" element={<Relationships />} />
-                  <Route path="/versions" element={<Versions />} />
-                  <Route path="/financial" element={<Financial />} />
-                  <Route path="/voting" element={<Voting />} />
-                  <Route path="/guardian" element={<Guardian />} />
-                  <Route path="/audit" element={<AuditTimeline />} />
-                  <Route path="/escalation" element={<Escalation />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="*" element={<EmptyState title="Page not found" body="This route does not exist." action={<Link className="text-sm font-semibold text-primary" to="/">Back to overview</Link>} />} />
-                </Routes>
-              </Suspense>
-            </AppShell>
-            <Inspectors />
+            <LiveProvider>
+              <TourProvider>
+                <AppShell>
+                  <Suspense fallback={<LoadingBlock rows={8} />}>
+                    <Routes>
+                      <Route path="/" element={<Overview />} />
+                      <Route path="/proposals" element={<Proposals />} />
+                      <Route path="/proposals/:id" element={<Proposals />} />
+                      <Route path="/relationships" element={<Relationships />} />
+                      <Route path="/versions" element={<Versions />} />
+                      <Route path="/financial" element={<Financial />} />
+                      <Route path="/voting" element={<Voting />} />
+                      <Route path="/guardian" element={<Guardian />} />
+                      <Route path="/audit" element={<AuditTimeline />} />
+                      <Route path="/escalation" element={<Escalation />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="*" element={<EmptyState title="Page not found" body="This route does not exist." action={<Link className="text-sm font-semibold text-primary" to="/">Back to overview</Link>} />} />
+                    </Routes>
+                  </Suspense>
+                </AppShell>
+                <Inspectors />
+                <TourOverlay />
+              </TourProvider>
+            </LiveProvider>
           </Gate>
           <Toasts />
         </AppProvider>

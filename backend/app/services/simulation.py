@@ -30,7 +30,7 @@ from ..chain.client import ChainClient
 from ..clock import utcnow
 from ..models import Proposal, Simulation, new_id
 from ..runtime import Deployment, runtime
-from . import bytecode
+from . import bytecode, live
 from .decoder import describe_action
 from .intent import extract_assertions, transfer_assertions
 from .labels import Labeler, format_token
@@ -171,8 +171,9 @@ def _arg_variants(inputs: list[dict[str, Any]] | None, caller: str, big_amount: 
 
 
 class _Sim:
-    def __init__(self, db: Session, deployment: Deployment, proposal: Proposal):
+    def __init__(self, db: Session, deployment: Deployment, proposal: Proposal, sim_id: str | None = None):
         self.db = db
+        self.sim_id = sim_id
         self.d = deployment
         self.chain = runtime.chain
         self.labeler = Labeler(db)
@@ -180,6 +181,9 @@ class _Sim:
         self.tokens = [deployment.c("usdc"), deployment.c("atlas")]
         self.treasury = deployment.c("guard")
         self.findings: list[dict[str, Any]] = []
+
+    def step(self, stage: str, message: str, status: str = "info") -> None:
+        live.activity(self.proposal.id, stage, message, status, simulation_id=self.sim_id)
 
     def finding(self, rule_id: str, severity: str, title: str, explanation: str, evidence: Any = None) -> None:
         self.findings.append(
@@ -282,6 +286,7 @@ class _Sim:
         assertions = intents["assertions"] + transfer_assertions(approved_decoded or decoded)
         for i, a in enumerate(assertions, start=1):
             a["id"] = f"IA-{i:02d}"
+        self.step("decode", f"Decoded {len(decoded)} action(s); extracted {len(assertions)} checkable intent assertion(s) from the proposal text.")
 
         holders: set[str] = {self.treasury, self.d.c("fee_vault")}
         for d in decoded:
@@ -330,6 +335,9 @@ class _Sim:
                     "reference_implementation": (reference_impls or {}).get(proxy.lower()),
                 }
             )
+            self.step("bytecode", f"Upgrade of {L.label(proxy) or proxy}: new code has {len(new_an['selectors'])} entry points"
+                      + (f" and hard-codes {len(embedded_new)} unknown address(es)" if embedded_new else "") + f"; ran {len(upgrades[-1]['probes_before'])} baseline probes.",
+                      "warning" if embedded_new else "info")
             if not new_an.get("size"):
                 self.finding("SIM-R011", "critical", "Upgrade target has no code",
                              f"The new implementation {L.describe(new_impl)} has no deployed bytecode. The upgrade would brick the contract.")
@@ -342,6 +350,7 @@ class _Sim:
         before_admin_owner = _owner_of(chain, proxy_admin)
 
         # Execute the submitted actions exactly as the guard would.
+        self.step("execute", f"Executing {len(actions)} action(s) as the ExecutionGuard (impersonated) on the snapshot.")
         chain.impersonate(self.treasury)
         chain.set_balance(self.treasury, 10**21)
         action_results: list[dict[str, Any]] = []
@@ -370,6 +379,9 @@ class _Sim:
                                  "Execution through the guard would fail as a whole.", res.revert)
         finally:
             chain.stop_impersonating(self.treasury)
+        reverted = sum(1 for r in action_results if r["status"] == "reverted")
+        self.step("execute", f"{len(action_results) - reverted} action(s) succeeded" + (f", {reverted} reverted" if reverted else "") + ".",
+                  "warning" if reverted else "success")
 
         after_bal = snapshot_balances()
         after_admin_owner = _owner_of(chain, proxy_admin)
@@ -416,6 +428,9 @@ class _Sim:
                 p for p in up["probes_after"]
                 if (p["outflows"] or p["control_changed"]) and (p["caller"].lower(), p["function"]) not in before_caps
             ]
+            self.step("probe", f"Re-probed the upgraded code with {len(up['callers'])} caller(s): "
+                      + (f"{len(up['new_capabilities'])} new way(s) to move funds or change control." if up["new_capabilities"] else "no new fund-moving capability."),
+                      "failure" if up["new_capabilities"] else "success")
             behaviour_diff = []
             for fn_sig, after_vals in up["samples_after"].items():
                 before_vals = up["samples_before"].get(fn_sig)
@@ -455,6 +470,9 @@ class _Sim:
                                  "of treasury funds at any later time, without another vote.", ap)
 
         evaluated = [self._evaluate(a, upgrades, balance_changes, observed_transfers, state_changes) for a in assertions]
+        violated = sum(1 for a in evaluated if a["status"] == "violated")
+        self.step("intent", f"Checked {len(evaluated)} intent assertion(s) against observed behaviour: "
+                  + (f"{violated} contradicted." if violated else "none contradicted."), "failure" if violated else "success")
 
         for a in evaluated:
             if a["status"] == "violated":
@@ -756,9 +774,10 @@ def run_simulation(
     with chain.lock:
         sim.chain_block = chain.block_number()
         snap = chain.snapshot()
+        live.activity(proposal.id, "snapshot", f"Snapshot of the chain at block {sim.chain_block}; nothing below touches real state.", simulation_id=sim.id)
         try:
             refs = reference_impls if reference_impls is not None else reviewed_implementations(proposal, version, actions)
-            report = _Sim(db, deployment, proposal).run(actions, approved_manifest, declared_text, refs)
+            report = _Sim(db, deployment, proposal, sim.id).run(actions, approved_manifest, declared_text, refs)
             sim.status, sim.verdict, sim.report = "completed", report["verdict"], report
         except Exception as exc:  # report failure explicitly; never claim a pass
             log.exception("simulation failed for %s", proposal.id)
@@ -767,6 +786,8 @@ def run_simulation(
         finally:
             if not chain.revert_to(snap):
                 log.error("evm_revert to %s failed; chain state may include simulation effects", snap)
+    live.activity(proposal.id, "verdict", f"Verdict {sim.verdict.upper()}. Chain reverted to block {sim.chain_block}.",
+                  {"pass": "success", "flag": "warning", "block": "failure"}.get(sim.verdict, "failure"), simulation_id=sim.id, verdict=sim.verdict)
     sim.finished_at = utcnow()
     db.add(sim)
     db.commit()

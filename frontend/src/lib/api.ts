@@ -434,3 +434,52 @@ export interface EvaluationChain {
   formula: string;
   label: string;
 }
+
+export interface QAEntry {
+  kind: "question" | "answer" | "follow_up" | "accepted" | "withdrawn";
+  author: string;
+  role: "reviewer" | "proposer";
+  at: string;
+  text: string;
+  entered_by?: string;
+  round?: number;
+  answer_hash?: string;
+  signature?: string;
+  signer?: string;
+  signature_valid?: boolean;
+  evidence_id?: string | null;
+  evidence_name?: string | null;
+  evidence_hash?: string | null;
+}
+
+export type QuestionStatus = "open" | "answered" | "needs_more" | "accepted" | "withdrawn";
+
+export interface Question {
+  id: string;
+  proposal_id: string;
+  finding: { id: string; title: string; severity: Severity; status: string; kind: string; superseded?: boolean } | null;
+  rule_id: string | null;
+  version: number;
+  text: string;
+  status: QuestionStatus;
+  asked_by: string;
+  asked_at: string;
+  updated_at: string;
+  thread: QAEntry[];
+}
+
+export interface QuestionSuggestion {
+  finding_id: string;
+  rule_id: string;
+  severity: Severity;
+  title: string;
+  kind: string;
+  question: string;
+}
+
+export interface QuestionsOverview {
+  items: Question[];
+  suggestions: QuestionSuggestion[];
+  counts: Record<QuestionStatus, number>;
+  note: string;
+}

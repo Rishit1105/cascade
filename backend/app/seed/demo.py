@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from ..clock import from_timestamp, pinned
 from ..models import Challenge, new_id
 from ..runtime import Deployment, runtime
-from ..services import audit, coi, evidence, execution, governance, proposals
+from ..services import audit, coi, evidence, execution, governance, proposals, questions
 from ..services.analysis import service as analysis
 from ..services.findings import set_status
 from ..services.notifications import notify
@@ -257,6 +257,24 @@ class Seeder:
                 db.commit()
                 audit.record(event_type="challenge_filed", summary="Northstar Labs challenged the undisclosed-transfer finding on GOV-042 (counter-evidence pending).",
                              actor="Northstar Labs · proposer", source="seed", status="warning", proposal_id="GOV-042", details={"finding_id": f.id})
+            # Proposer Q&A: one answer awaiting a reviewer on GOV-042 and GOV-044, one open question on GOV-044.
+            def gap(pid: str, rule: str):
+                return db.scalars(select(Finding).where(Finding.proposal_id == pid, Finding.rule_id == rule, Finding.superseded_at.is_(None))).first()
+
+            asked = []
+            for pid, rule, who in (("GOV-042", "MI-R012", "Orion Guild · delegate"), ("GOV-044", "MI-R001", "Community reviewer (demo)"),
+                                   ("GOV-044", "MI-R002", "Community reviewer (demo)")):
+                f_gap = gap(pid, rule)
+                if f_gap:
+                    p_q = p42 if pid == "GOV-042" else p44
+                    asked.append((p_q, rule, questions.ask(db, p_q, text=f_gap.remediation or f_gap.title, finding_id=f_gap.id, actor=who, source="seed")))
+        with self.at(0.15):
+            for p_q, rule, q in asked:
+                if rule == "MI-R012":
+                    questions.answer(db, p_q, q, text=C.GOV042_AMOUNT_ANSWER_TEXT, actor="Northstar Labs · proposer", source="seed")
+                elif rule == "MI-R001":
+                    questions.answer(db, p_q, q, text=C.GOV044_BUDGET_ANSWER_TEXT, actor="Events working group · proposer",
+                                     evidence_name="Q1 events budget breakdown.md", evidence_text=C.GOV044_BUDGET_EVIDENCE, source="seed")
             notify(db, "warning", "GOV-043 vote closed: awaiting finalization", "The governor vote passed. Finalizing it approves the manifest on the guard and starts the sentinel review.",
                    "/guardian?proposal=GOV-043")
             notify(db, "info", "GOV-042 approved and executable", "Run the execution demo: the approved payload and tampered variants.", "/guardian?proposal=GOV-042")

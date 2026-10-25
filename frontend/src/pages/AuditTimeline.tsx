@@ -144,7 +144,7 @@ export default function AuditTimeline() {
             <a className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line text-sm font-medium hover:bg-subtle" href={`/api/audit/export?format=csv${proposal ? `&proposal=${proposal}` : ""}`} download>
               <Download className="h-3.5 w-3.5" /> Export CSV
             </a>
-            <Button variant="dark" icon={<ShieldCheck className="h-3.5 w-3.5" />} loading={verify.isPending} onClick={() => verify.mutate(undefined)}>Verify on-chain</Button>
+            <Button variant="dark" data-tour="verify-ledger" icon={<ShieldCheck className="h-3.5 w-3.5" />} loading={verify.isPending} onClick={() => verify.mutate(undefined)}>Verify on-chain</Button>
             <Button icon={<Anchor className="h-3.5 w-3.5" />} loading={anchor.isPending} onClick={() => anchor.mutate(undefined)}>Anchor head</Button>
           </div>
           <div className="max-h-[540px] space-y-2 overflow-y-auto pr-1 scroll-thin">

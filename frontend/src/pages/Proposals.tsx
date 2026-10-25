@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowRight, FilePlus2, Pencil, Search } from "lucide-react";
 import type { ProposalItem } from "../lib/api";
 import { cx, timeAgo } from "../lib/format";
-import { useProposal, useProposals } from "../lib/queries";
+import { useProposal, useProposals, useQuestions } from "../lib/queries";
 import { Badge, Button, DemoBadge, EmptyState, ErrorState, LoadingBlock, StatusBadge, Tabs } from "../components/ui";
 import { BriefTab } from "./proposal/Brief";
 import { EvidenceTab } from "./proposal/Evidence";
@@ -11,10 +11,11 @@ import { DisclosureTab } from "./proposal/Disclosure";
 import { VersionsTab } from "./proposal/VersionsTab";
 import { MilestonesTab } from "./proposal/Milestones";
 import { FindingsTab } from "./proposal/FindingsTab";
+import { QATab } from "./proposal/QATab";
 import { DecisionPanel } from "./proposal/DecisionPanel";
 import { CreateProposal, EditDraft } from "./proposal/Forms";
 
-type Tab = "brief" | "evidence" | "disclosure" | "versions" | "milestones" | "findings";
+type Tab = "brief" | "evidence" | "disclosure" | "versions" | "milestones" | "findings" | "qa";
 const STATUS_FILTERS = [
   { id: "", label: "All" },
   { id: "in_review", label: "Draft" },
@@ -70,6 +71,8 @@ export default function Proposals() {
 
   const detail = useProposal(id);
   const p = detail.data;
+  const qa = useQuestions(id);
+  const qaPending = qa.data ? qa.data.counts.open + qa.data.counts.needs_more + qa.data.counts.answered : undefined;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)_340px]">
@@ -155,6 +158,7 @@ export default function Proposals() {
                   { id: "versions", label: "Versions", count: p.versions.length },
                   { id: "milestones", label: "Milestones", count: p.milestones.length },
                   { id: "findings", label: "Findings", count: p.findings.filter((f) => f.status === "open" || f.status === "challenged").length },
+                  { id: "qa", label: "Q&A", count: qaPending },
                 ]}
               />
             </div>
@@ -165,6 +169,7 @@ export default function Proposals() {
               {tab === "versions" && <VersionsTab p={p} />}
               {tab === "milestones" && <MilestonesTab p={p} />}
               {tab === "findings" && <FindingsTab p={p} />}
+              {tab === "qa" && <QATab p={p} />}
             </div>
           </div>
         )}

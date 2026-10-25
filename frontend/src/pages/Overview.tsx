@@ -1,17 +1,20 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowUpRight, BellRing, CircleCheck, FileText, Landmark, PlayCircle, Radar, ShieldCheck, ShieldX } from "lucide-react";
+import { ArrowUpRight, BellRing, CircleCheck, Compass, FileText, Landmark, PlayCircle, Radar, ShieldCheck, ShieldX } from "lucide-react";
 import type { EvaluationChain } from "../lib/api";
 import { cx, dateTime, formatUnits, timeAgo, usdc } from "../lib/format";
 import { useGraph, useOverview } from "../lib/queries";
+import { useTour } from "../lib/tour";
 import { EvaluationChainView } from "../components/EvaluationChain";
 import { GraphLegend, RelationshipGraph } from "../components/RelationshipGraph";
 import { Badge, Button, DemoBadge, EmptyState, ErrorState, LoadingBlock, MetricCard, PageHeader, Panel, ProgressBar, SeverityBadge, StatusBadge, TxLink, VerificationBadge } from "../components/ui";
+import { LiveIndicator, SentinelActivity } from "../components/SentinelActivity";
 
 export default function Overview() {
   const ov = useOverview();
   const graph = useGraph();
   const navigate = useNavigate();
+  const tour = useTour();
   const pipeline: Array<{ proposal: any; evaluation: EvaluationChain }> = ov.data?.pipeline ?? [];
   const defaultId = useMemo(() => pipeline.find((p) => p.proposal.id === "GOV-043")?.proposal.id ?? pipeline[0]?.proposal.id, [pipeline]);
   const [selected, setSelected] = useState<string | undefined>();
@@ -28,6 +31,9 @@ export default function Overview() {
         actions={
           <>
             <DemoBadge />
+            <Button icon={<Compass className="h-4 w-4" />} onClick={() => tour.start(0)}>
+              Guided tour
+            </Button>
             <Button icon={<PlayCircle className="h-4 w-4" />} onClick={() => navigate("/guardian?p=GOV-042")}>
               Run execution demo
             </Button>
@@ -64,6 +70,7 @@ export default function Overview() {
 
       <Panel
         className="mt-4"
+        tour="eval-chain"
         title="Probabilistic evaluation chain"
         subtitle="Proposal claims → conflict-of-interest risk → on-chain voting → execution discrepancy. Every factor is listed; nothing is a black-box score."
         actions={
@@ -210,6 +217,13 @@ export default function Overview() {
             <div className="flex justify-between"><span className="text-muted">Last tick</span><span className="text-xs">{timeAgo(ov.data?.sentinel?.last_tick)}</span></div>
             {ov.data?.sentinel?.last_error && <p className="rounded bg-danger/5 p-2 text-2xs text-danger">{ov.data.sentinel.last_error}</p>}
             <p className="pt-1 text-2xs text-muted">The guardian role can only block an approval. It can never approve, alter or execute anything.</p>
+          </div>
+          <div className="mt-3 border-t border-line pt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-fg">Live activity</p>
+              <LiveIndicator />
+            </div>
+            <SentinelActivity limit={3} />
           </div>
         </Panel>
       </div>

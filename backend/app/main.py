@@ -11,12 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__, bootstrap
-from .api import execution, ops, proposals, system
+from .api import execution, live, ops, proposals, system
 from .chain.client import ChainRPCError, ChainUnavailable, TxReverted
 from .config import get_settings
 from .db import create_all
 from .errors import DomainError
 from .runtime import runtime
+from .services.live import bus
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 logging.getLogger("web3").setLevel(logging.WARNING)
@@ -29,6 +30,7 @@ async def lifespan(_: FastAPI):
     create_all()
     bootstrap.start()
     yield
+    bus.close()
     if runtime.sentinel is not None:
         runtime.sentinel.stop()
 
@@ -72,7 +74,7 @@ def create_app() -> FastAPI:
         log.error("chain RPC error: %s", exc)
         return JSONResponse(status_code=502, content={"error": {"code": "chain_rpc_error", "message": str(exc), "details": exc.error}})
 
-    for router in (system.router, proposals.router, execution.router, ops.router):
+    for router in (system.router, proposals.router, execution.router, ops.router, live.router):
         app.include_router(router)
     return app
 

@@ -7,6 +7,8 @@ import { useAction, useEvaluation, useGovernance } from "../../lib/queries";
 import { VoteBar } from "../../components/common";
 import { Badge, Button, Callout, Panel, Segmented, StatusBadge } from "../../components/ui";
 import { CommitButton } from "./VersionsTab";
+import { LiveIndicator, SentinelActivity } from "../../components/SentinelActivity";
+import { useActivityRuns } from "../../lib/live";
 
 export function DecisionPanel({ p }: { p: ProposalDetail }) {
   const gov = useGovernance(p.id, true);
@@ -24,6 +26,7 @@ export function DecisionPanel({ p }: { p: ProposalDetail }) {
   const finalize = useAction(() => api.post<any>(`/proposals/${p.id}/governance/finalize`), {
     success: (r: any) => (r.approved ? "Vote finalized: manifest approved on the guard. The sentinel is reviewing it now." : "Vote finalized: not approved"),
   });
+  const runs = useActivityRuns(p.id, 1);
   const latest = p.versions[p.versions.length - 1];
   const voters = g.voters_available ?? [];
   const guard = g.guard;
@@ -95,7 +98,7 @@ export function DecisionPanel({ p }: { p: ProposalDetail }) {
           {g.state === "Succeeded" && (
             <>
               <Callout tone="info" title="Vote passed">Finalizing executes the Governor proposal, which records the manifest approval on the ExecutionGuard. The sentinel then simulates it during the review window.</Callout>
-              <Button size="sm" variant="primary" className="w-full" loading={finalize.isPending} onClick={() => finalize.mutate(undefined)}>
+              <Button size="sm" variant="primary" className="w-full" data-tour="finalize" loading={finalize.isPending} onClick={() => finalize.mutate(undefined)}>
                 Finalize vote → approve manifest
               </Button>
             </>
@@ -130,6 +133,12 @@ export function DecisionPanel({ p }: { p: ProposalDetail }) {
           </Button>
         </div>
       </Panel>
+
+      {(runs.length > 0 || guard.status === "approved") && (
+        <Panel title="Sentinel review" icon={<Radar className="h-4 w-4 text-primary" />} actions={<LiveIndicator />} subtitle="Every step of the review of this proposal, as it runs.">
+          <SentinelActivity proposalId={p.id} limit={2} empty="Waiting for the sentinel to see the approval on-chain…" />
+        </Panel>
+      )}
 
       {evalChain.data && (
         <Panel title="Evaluation chain" icon={<Radar className="h-4 w-4 text-muted" />} subtitle={evalChain.data.label}>

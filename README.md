@@ -27,20 +27,26 @@ Requirements: Node 20.11+, Python 3.11+. Optional: `ANTHROPIC_API_KEY` in `backe
 
 ## Demo walkthrough
 
+The quickest way in is the **guided tour** (compass button in the top bar, or *Guided tour* on the Overview). It opens each page, highlights the control to use and waits for you to do the step yourself, detecting completion from live ledger and sentinel events. The manual route:
+
 1. **Overview**: the four-stage chain (Proposal Claims → Conflict of Interest → On-chain Voting → Execution Discrepancy), with every likelihood ratio listed.
 2. **Proposals → GOV-042**: cited brief, the 520k vs 500k contradiction, and the undisclosed proposer → recipient transfer.
 3. **Execution guardian → GOV-042 → Changed recipient → Execute guarded demo**: the contract reverts with `ManifestMismatch` (real tx hash, nothing moves). Then **Approved payload** executes, and a replay is rejected with `AlreadyExecuted`.
 4. **GOV-043 (contested upgrade) → Simulate contract run**: the submitted bytecode hard-codes an address that can drain the vault through `syncAccounting()`, contradicting "moves no funds". The reviewed implementation passes.
 5. **Proposals → GOV-043 → Finalize vote**: the sentinel simulates the approved manifest and halts it on-chain inside the review window. Executing then fails with `ProposalIsHalted`.
 6. **Audit timeline → Verify on-chain**: hash links, re-checked receipts and anchored ledger heads.
+7. **Proposals → GOV-044 → Q&A**: the proposer answered a missing-information question with an EIP-712-signed statement and a budget breakdown. Accept it and the finding resolves, lowering the Proposal Claims stage. Ask for more and the thread continues. Editing a stored answer breaks its signature check.
+8. **Execution guardian → Manifest builder**: edit actions as structured fields (transfer, approve, upgrade, contract call, raw calldata). Each edit re-encodes, re-hashes and re-runs `ExecutionGuard.preflight()`, showing which part of the EIP-712 digest stopped matching. Read-only: nothing is stored or sent.
+
+The sentinel's work streams live (Server-Sent Events, `GET /api/stream`): every simulation stage, verdict and halt appears in the *Sentinel review* panels and the top-bar activity popover as it happens, and pages refresh when the ledger changes.
 
 ## Tests
 
 ```bash
 npm run test:contracts   # 25 Hardhat tests: every rejection case, Governor e2e, registry, upgrade fixtures
-npm run test:backend     # 22 unit + 23 integration tests (starts its own node on :8546)
+npm run test:backend     # 24 unit + 26 integration tests (starts its own node on :8546)
 ```
 
 ## Honest limits
 
-A hash proves equality with what was committed, not truth. A transfer edge shows value moved, not common ownership. Simulation covers the probed callers and the current state, so it cannot prove the absence of backdoors (for example magic-argument triggers). The guard only protects execution routed through it. Votes are cast by demo delegate accounts. This is a prototype: no real treasury, no audited contracts.
+A hash proves equality with what was committed, not truth. A transfer edge shows value moved, not common ownership. Simulation covers the probed callers and the current state, so it cannot prove the absence of backdoors (for example magic-argument triggers). The guard only protects execution routed through it. Accepting a proposer's answer records a reviewer's judgement that it closes the gap, not that it is true. Votes are cast by demo delegate accounts. This is a prototype: no real treasury, no audited contracts.

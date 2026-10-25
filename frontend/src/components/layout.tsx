@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bell, Blocks, BookOpenCheck, FileText, GitCompareArrows, Landmark, LayoutDashboard, Loader2, Menu, Moon, Network, Radar,
+  Bell, Blocks, BookOpenCheck, Compass, FileText, GitCompareArrows, Landmark, LayoutDashboard, Loader2, Menu, Moon, Network, Radar,
   ScrollText, Search, Settings, ShieldCheck, Siren, Sun, Vote, X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,8 @@ import { useApp } from "../lib/app";
 import { cx, timeAgo } from "../lib/format";
 import { useAction, useHealth, useNotifications, useSystemStatus } from "../lib/queries";
 import { DemoBadge, IconButton } from "./ui";
+import { LiveIndicator, SentinelActivity } from "./SentinelActivity";
+import { useTour } from "../lib/tour";
 
 export const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
@@ -215,21 +217,42 @@ function Notifications() {
 function ChainStatus() {
   const h = useHealth();
   const s = useSystemStatus();
+  const [open, setOpen] = useState(false);
   const connected = h.data?.chain.connected;
   const sentinel = s.data?.sentinel;
   return (
-    <div className="hidden items-center gap-3 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs xl:flex" title="Local Hardhat demo chain">
-      <span className="flex items-center gap-1.5">
-        <span className={cx("h-2 w-2 rounded-full", connected ? "bg-primary" : "bg-danger")} />
-        <Blocks className="h-3.5 w-3.5 text-muted" />
-        <span className="font-medium text-fg">{connected ? `#${h.data?.chain.block}` : "offline"}</span>
-        <span className="text-faint">· chain {h.data?.chain.chain_id ?? "—"}</span>
-      </span>
-      <span className="h-4 w-px bg-line" />
-      <span className="flex items-center gap-1.5" title={sentinel?.last_error ?? "Sentinel watches ManifestApproved events and simulates every approval."}>
-        <Radar className={cx("h-3.5 w-3.5", sentinel?.running ? "text-primary" : "text-faint")} />
-        <span className="text-muted">Sentinel {sentinel?.running ? "watching" : "off"}</span>
-      </span>
+    <div className="relative hidden xl:block">
+      <div className="flex items-center gap-3 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs" title="Local Hardhat demo chain">
+        <span className="flex items-center gap-1.5">
+          <span className={cx("h-2 w-2 rounded-full", connected ? "bg-primary" : "bg-danger")} />
+          <Blocks className="h-3.5 w-3.5 text-muted" />
+          <span className="font-medium text-fg">{connected ? `#${h.data?.chain.block}` : "offline"}</span>
+          <span className="text-faint">· chain {h.data?.chain.chain_id ?? "—"}</span>
+        </span>
+        <span className="h-4 w-px bg-line" />
+        <button
+          className="flex items-center gap-1.5 rounded hover:text-fg"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          title={sentinel?.last_error ?? "Sentinel watches ManifestApproved events and simulates every approval. Click for live activity."}
+        >
+          <Radar className={cx("h-3.5 w-3.5", sentinel?.running ? "text-primary" : "text-faint")} />
+          <span className="text-muted">Sentinel {sentinel?.running ? "watching" : "off"}</span>
+        </button>
+        <span className="h-4 w-px bg-line" />
+        <LiveIndicator />
+      </div>
+      {open && (
+        <div className="panel absolute right-0 top-10 z-50 w-[440px] max-w-[calc(100vw-2rem)] shadow-pop">
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <p className="text-sm font-semibold">Sentinel activity</p>
+            <button className="text-xs font-medium text-muted hover:text-fg" onClick={() => setOpen(false)}>Close</button>
+          </div>
+          <div className="max-h-[460px] overflow-y-auto p-3 scroll-thin">
+            <SentinelActivity limit={8} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -261,6 +284,7 @@ function Persona() {
 
 function Topbar({ onMenu }: { onMenu: () => void }) {
   const { theme, toggleTheme } = useApp();
+  const tour = useTour();
   return (
     <header className="sticky top-0 z-30 flex h-[56px] items-center gap-3 border-b border-line bg-surface/95 px-3 backdrop-blur md:px-5">
       <IconButton label="Open menu" onClick={onMenu} className="md:hidden">
@@ -279,6 +303,9 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         <span className="hidden lg:inline-flex">
           <DemoBadge />
         </span>
+        <IconButton label={tour.active ? "Guided tour (running)" : "Start the guided tour"} onClick={() => tour.start(tour.active ? tour.index : 0)} className={cx(tour.active && "text-primary")}>
+          <Compass className="h-[17px] w-[17px]" />
+        </IconButton>
         <Notifications />
         <IconButton label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"} onClick={toggleTheme}>
           {theme === "light" ? <Moon className="h-[17px] w-[17px]" /> : <Sun className="h-[17px] w-[17px]" />}

@@ -19,7 +19,7 @@ from ..clock import iso, utcnow
 from ..db import SessionLocal
 from ..models import KeyValue, Proposal, ProposalVersion
 from ..runtime import runtime
-from . import audit
+from . import audit, live
 from .alerts import raise_alert
 from .canonical import content_hash
 from .findings import sync_findings
@@ -63,6 +63,8 @@ def review_version(db, p: Proposal, v: ProposalVersion, trigger: str = "sentinel
     report = sim.report or {}
     sync_findings(db, p.id, "simulation", simulation_findings(report), source_ref=sim.id)
     db.commit()
+    for f in report.get("findings", [])[:4]:
+        live.activity(p.id, "finding", f"{f['rule_id']} ({f['severity']}): {f['title']}", "failure" if f["severity"] == "critical" else "warning", simulation_id=sim.id)
     audit.record(
         event_type="simulation_completed",
         summary=f"Simulation of {p.id} v{v.version}: verdict {sim.verdict.upper()}. {report.get('summary', report.get('error', ''))[:300]}",
@@ -80,29 +82,36 @@ def review_version(db, p: Proposal, v: ProposalVersion, trigger: str = "sentinel
                             data={"simulation_id": sim.id})
         db.commit()
         if allow_halt and policy["auto_halt_on_block_verdict"]:
+            live.activity(p.id, "halt", "BLOCK verdict: sending the guardian halt transaction on-chain.", "failure")
             try:
                 result = halt(db, p, f"Sentinel simulation {sim.id}: " + "; ".join(f["title"] for f in report.get("findings", [])[:3]),
                               "DAOGuard sentinel", source="sentinel",
                               reason_data={"simulation_id": sim.id, "report_hash": content_hash({"findings": report.get("findings", [])})})
                 outcome.update(halted=True, halt_tx=result["tx_hash"])
+                live.activity(p.id, "halted", f"Halted on-chain in block {result.get('block_number')}. The manifest can no longer execute.", "success",
+                              tx_hash=result["tx_hash"])
                 from .alerts import record_action
 
                 record_action(db, alert, "halted", "DAOGuard sentinel", "Autonomous on-chain halt within the review window.", result)
             except Exception as exc:  # e.g. already executed: report loudly, never pretend it was halted
                 log.error("auto-halt failed for %s: %s", p.id, exc)
+                live.activity(p.id, "halt_failed", f"Could not halt: {exc}"[:300], "failure")
                 audit.record(event_type="auto_halt_failed", summary=f"Sentinel could NOT halt {p.id}: {exc}", actor="DAOGuard sentinel",
                              source="sentinel", status="failure", proposal_id=p.id, version=v.version)
                 notify(db, "critical", f"Sentinel could not halt {p.id}", str(exc)[:300], f"/guardian?proposal={p.id}")
                 db.commit()
         else:
+            live.activity(p.id, "escalated", "BLOCK verdict, but autonomous halt is disabled by policy: escalated to humans.", "warning")
             notify(db, "critical", f"{p.id} needs a human decision", "Simulation produced a BLOCK verdict; autonomous halt is disabled by policy.", f"/escalation?proposal={p.id}")
             db.commit()
     elif sim.verdict == "flag":
+        live.activity(p.id, "flagged", "FLAG verdict: alert raised for human review; execution is not blocked.", "warning")
         raise_alert(db, proposal_id=p.id, source="simulation", severity="high", title=f"Simulation flagged {p.id} v{v.version} for review",
                     description=report.get("summary", ""), data={"simulation_id": sim.id})
         notify(db, "warning", f"Sentinel flagged {p.id}", report.get("summary", "")[:300], f"/guardian?proposal={p.id}")
         db.commit()
     elif sim.verdict == "pass":
+        live.activity(p.id, "passed", "PASS: no deviation from the declared intent was observed.", "success")
         notify(db, "success", f"Sentinel review passed for {p.id} v{v.version}", "No deviation from the declared intent was observed.", f"/guardian?proposal={p.id}")
         db.commit()
     return outcome
@@ -194,6 +203,8 @@ class Sentinel:
             db.commit()
             return
         self.status["reviews"] += 1
+        live.activity(p.id, "approval_seen", f"ManifestApproved for {p.id} v{v.version} in block {log_['block_number']}. Starting review inside the window.",
+                      "info", tx_hash=log_["tx_hash"], block_number=log_["block_number"])
         review_version(db, p, v)
 
 

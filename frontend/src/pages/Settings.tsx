@@ -149,7 +149,7 @@ export default function SettingsPage() {
               <p className="text-sm font-semibold text-danger">Reset the demo environment</p>
               <p className="text-xs text-muted">Resets the local chain to genesis, wipes the database, re-deploys the contracts and re-seeds the 30-day history.</p>
             </div>
-            <Button variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setReset(true)}>Reset demo</Button>
+            <Button variant="danger" data-tour="reset-demo" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setReset(true)}>Reset demo</Button>
           </div>
         </Panel>
       </div>

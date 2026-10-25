@@ -11,10 +11,12 @@ import { cx, dateTime, shortAddr, titleCase } from "../lib/format";
 import { useAction, useAttempts, useGovernance, useManifest, useProposal, useScenarios, useSimulation, useSimulations } from "../lib/queries";
 import { ProposalPicker } from "../components/common";
 import { DiffViewer } from "../components/DiffViewer";
+import { ManifestBuilder } from "../components/ManifestBuilder";
 import { ConfirmDialog } from "../components/overlays";
 import { Badge, Button, Callout, EmptyState, ErrorState, Hash, LoadingBlock, Panel, SeverityBadge, StatusBadge, Tabs, TxLink } from "../components/ui";
+import { LiveIndicator, SentinelActivity } from "../components/SentinelActivity";
 
-type CenterTab = "diff" | "bytecode" | "payload";
+type CenterTab = "diff" | "builder" | "bytecode" | "payload";
 
 function Highlighted({ text, assertions, statuses }: { text: string; assertions: any[]; statuses: Record<string, string> }) {
   const spans = [...assertions].filter((a) => a.source?.char_start !== undefined).sort((a, b) => a.source.char_start - b.source.char_start);
@@ -55,7 +57,7 @@ export default function Guardian() {
   const sims = useSimulations(pid);
   const intent = useQuery({ queryKey: ["intent", pid], queryFn: () => api.get<any>(`/proposals/${pid}/intent`), enabled: !!pid });
   const [scenario, setScenarioState] = useState(params.get("scenario") ?? "safe");
-  const [tab, setTab] = useState<CenterTab>("diff");
+  const [tab, setTab] = useState<CenterTab>((params.get("view") as CenterTab) || "diff");
   const [check, setCheck] = useState<ExecutionCheck | null>(null);
   const [simResult, setSimResult] = useState<Simulation | null>(null);
   const [attempt, setAttempt] = useState<ExecutionAttempt | null>(null);
@@ -76,6 +78,15 @@ export default function Guardian() {
     setSimResult(null);
     setAttempt(null);
   }, [pid, scenario]);
+  // Links (and the guided tour) can switch scenario and view while the page is open.
+  const urlScenario = params.get("scenario");
+  const urlView = params.get("view") as CenterTab | null;
+  useEffect(() => {
+    if (urlScenario) setScenarioState(urlScenario);
+  }, [urlScenario]);
+  useEffect(() => {
+    if (urlView) setTab(urlView);
+  }, [urlView]);
   useEffect(() => {
     if (scenarios.data && scenario !== "custom" && !scenarios.data.find((s) => s.id === scenario)) setScenarioState("safe");
   }, [scenarios.data, scenario]);
@@ -223,6 +234,7 @@ export default function Guardian() {
             onChange={setTab}
             tabs={[
               { id: "diff", label: "Payload diff" },
+              { id: "builder", label: "Manifest builder" },
               ...(isUpgrade ? [{ id: "bytecode" as CenterTab, label: "Bytecode simulation" }] : []),
               { id: "payload", label: "Payload JSON" },
             ]}
@@ -266,6 +278,18 @@ export default function Guardian() {
                 </div>
               )}
             </>
+          )}
+          {tab === "builder" && pid && (
+            <ManifestBuilder
+              proposalId={pid}
+              submitted={submitted}
+              onPayload={(payload) => {
+                setCustomText(JSON.stringify(payload, null, 2));
+                setCustomError(null);
+                if (scenario !== "custom") setScenario("custom");
+              }}
+              onReset={() => setScenario("safe")}
+            />
           )}
           {tab === "bytecode" && (
             <>
@@ -400,6 +424,10 @@ export default function Guardian() {
 
           {attempt && <AttemptCard a={attempt} />}
 
+          <Panel title="Sentinel & simulation activity" icon={<Siren className="h-4 w-4 text-muted" />} actions={<LiveIndicator />} subtitle="Streamed live from the backend while reviews run.">
+            <SentinelActivity proposalId={p?.id} limit={4} empty="No simulation or sentinel review of this proposal in this session yet." />
+          </Panel>
+
           <Panel title="Execution attempts" subtitle="Real transactions to the ExecutionGuard on the local chain.">
             {(attempts.data ?? []).length === 0 && <p className="text-xs text-muted">No execution attempts yet.</p>}
             <ul className="space-y-1.5">
@@ -430,7 +458,7 @@ export default function Guardian() {
             <Button icon={<FlaskConical className="h-4 w-4" />} loading={simulate.isPending} disabled={!submitted} onClick={() => simulate.mutate(undefined)}>
               Simulate contract run
             </Button>
-            <Button variant="dark" icon={<Play className="h-4 w-4" />} disabled={!submitted} onClick={() => setConfirmExec(true)}>
+            <Button variant="dark" data-tour="execute" icon={<Play className="h-4 w-4" />} disabled={!submitted} onClick={() => setConfirmExec(true)}>
               Execute guarded demo
             </Button>
             <Button variant="outline-danger" icon={<Ban className="h-4 w-4" />} disabled={guard?.status !== "approved"} title={guard?.status !== "approved" ? "Only an approved, not-yet-executed manifest can be halted" : undefined} onClick={() => setConfirmHalt(true)}>

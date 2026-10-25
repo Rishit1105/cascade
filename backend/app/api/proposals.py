@@ -12,15 +12,15 @@ from ..db import get_db
 from ..errors import Conflict, NotFound, ValidationFailed
 from ..models import Challenge, EvidenceDocument, Finding, MilestoneTracking, new_id
 from ..runtime import runtime
-from ..services import audit, coi, evidence, governance, proposals, risk_chain, treasury, views
+from ..services import audit, coi, evidence, governance, proposals, questions, risk_chain, treasury, views
 from ..services.analysis import service as analysis
 from ..services.analysis.text import ADDRESS_RE, parse_amounts
 from ..services.canonical import merkle_proof, verify_merkle_proof
 from ..services.findings import active_findings, set_status
 from ..services.findings import serialize as serialize_finding
 from .deps import actor, require_ready
-from .schemas import (AdvanceIn, ChallengeIn, ChallengeResponseIn, CommitIn, DisclosureIn, EvidenceIn, FindingStatusIn,
-                      MilestoneUpdateIn, ProposalCreate, ProposalPatch, VoteIn)
+from .schemas import (AdvanceIn, AnswerIn, AnswerReviewIn, ChallengeIn, ChallengeResponseIn, CommitIn, DisclosureIn, EvidenceIn,
+                      FindingStatusIn, MilestoneUpdateIn, ProposalCreate, ProposalPatch, QuestionIn, VoteIn, WithdrawIn)
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_ready)])
 
@@ -227,6 +227,39 @@ def respond(challenge_id: str, body: ChallengeResponseIn, db: Session = Depends(
     audit.record(event_type="challenge_answered", summary=f"Challenge {c.id} {body.decision} by {who}.", actor=who, source="ui",
                  status="info", proposal_id=c.proposal_id, details={"challenge_id": c.id, "response": body.response})
     return {"id": c.id, "status": c.status}
+
+
+# ------------------------------------------------------------------ proposer Q&A
+@router.get("/proposals/{proposal_id}/questions")
+def list_questions(proposal_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    return questions.overview(db, proposals.get_proposal(db, proposal_id))
+
+
+@router.post("/proposals/{proposal_id}/questions", status_code=201)
+def ask_question(proposal_id: str, body: QuestionIn, db: Session = Depends(get_db), who: str = Depends(actor)) -> dict[str, Any]:
+    p = proposals.get_proposal(db, proposal_id)
+    return questions.serialize(db, p, questions.ask(db, p, text=body.text, finding_id=body.finding_id, actor=who))
+
+
+@router.post("/proposals/{proposal_id}/questions/{question_id}/answer")
+def answer_question(proposal_id: str, question_id: str, body: AnswerIn, db: Session = Depends(get_db), who: str = Depends(actor)) -> dict[str, Any]:
+    p = proposals.get_proposal(db, proposal_id)
+    q = questions.get_question(db, question_id, proposal_id)
+    return questions.serialize(db, p, questions.answer(db, p, q, text=body.text, actor=who, evidence_name=body.evidence_name, evidence_text=body.evidence_text))
+
+
+@router.post("/proposals/{proposal_id}/questions/{question_id}/review")
+def review_answer(proposal_id: str, question_id: str, body: AnswerReviewIn, db: Session = Depends(get_db), who: str = Depends(actor)) -> dict[str, Any]:
+    p = proposals.get_proposal(db, proposal_id)
+    q = questions.get_question(db, question_id, proposal_id)
+    return questions.serialize(db, p, questions.review(db, p, q, decision=body.decision, note=body.note, actor=who))
+
+
+@router.post("/proposals/{proposal_id}/questions/{question_id}/withdraw")
+def withdraw_question(proposal_id: str, question_id: str, body: WithdrawIn, db: Session = Depends(get_db), who: str = Depends(actor)) -> dict[str, Any]:
+    p = proposals.get_proposal(db, proposal_id)
+    q = questions.get_question(db, question_id, proposal_id)
+    return questions.serialize(db, p, questions.withdraw(db, p, q, note=body.note, actor=who))
 
 
 @router.post("/proposals/{proposal_id}/versions/commit", status_code=201)

@@ -106,6 +106,47 @@ def test_manifest_digest_parity_with_contract(client):
     assert "0x" + onchain.hex() == m["manifest_hash"] == manifest_digest(m["chain_id"], m["guard"], m["proposal_key"], m["version"], manifest_actions(m))
 
 
+def test_manifest_builder_preview_matches_contract_and_explains_tampering(client):
+    from app.db import SessionLocal
+    from app.models import AuditEvent, ExecutionCheck
+    from app.runtime import runtime
+
+    def counts():
+        db = SessionLocal()
+        try:
+            return db.query(AuditEvent).count(), db.query(ExecutionCheck).count()
+        finally:
+            db.close()
+
+    before = counts()
+    m = ok(client.get("/api/proposals/GOV-042/manifest"))
+    exact = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"payload": m["payload"]}))
+    assert exact["valid"] and exact["match"] and exact["preflight"]["would_execute"]
+    assert exact["preflight"]["contract_digest"] == exact["submitted"]["digest"] == m["manifest"]["manifest_hash"]
+    assert exact["specs"] == [{"kind": "erc20_transfer", "token": m["payload"]["actions"][0]["target"], "to": m["manifest"]["actions"][0]["expected_recipient"], "amount": "500000"}]
+
+    spec = {**exact["specs"][0], "amount": "520000"}
+    tampered = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"context": {"version": 2}, "actions": [spec]}))
+    assert not tampered["match"] and tampered["actions"][0]["differs_in"] == ["data"]
+    assert {r["part"] for r in tampered["comparison"] if not r["match"]} == {"Actions hash", "Manifest struct hash", "Digest"}
+    assert tampered["preflight"]["revert"]["name"] == "ManifestMismatch"
+
+    stale = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"context": {"version": 1}, "actions": [exact["specs"][0]]}))
+    assert not stale["match"] and not stale["preflight"]["would_execute"]
+    assert {r["part"] for r in stale["comparison"] if not r["match"]} >= {"Version", "Digest"}
+
+    bad = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"actions": [{**spec, "amount": "1.0000001"}, {**spec, "to": "0x123"}, {"kind": "nope"}]}))
+    assert not bad["valid"]
+    assert [e["path"] for e in bad["errors"]] == ["actions[0].amount", "actions[1].to", "actions[2].kind"]
+
+    vault = runtime.deployment.c("fee_vault")
+    call = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"actions": [{"kind": "contract_call", "target": vault, "signature": "setFeeBps(uint16)", "args": ["30"]}]}))
+    assert call["valid"] and call["actions"][0]["decoded"]["kind"] == "parameter"
+    again = ok(client.post("/api/proposals/GOV-042/manifest/preview", json={"payload": call["payload"]}))
+    assert again["specs"][0] == {"kind": "contract_call", "target": vault, "signature": "setFeeBps(uint16)", "args": ["30"], "value": "0"}
+    assert counts() == before, "the builder must not write anything"
+
+
 def test_treasury_impact_math(client):
     t = ok(client.get("/api/proposals/GOV-042/treasury"))
     assert t["balance_base"] == str(2_500_000 * 10**6)
@@ -210,11 +251,66 @@ def test_sentinel_halts_approved_backdoor_and_guard_enforces(client):
     assert {"proposal_halted", "simulation_completed", "execution_rejected"} <= set(events)
 
 
+def test_live_activity_records_each_sentinel_stage(client):
+    items = ok(client.get("/api/activity", params={"proposal": "GOV-043", "kind": "activity"}))["items"]
+    start = max(i for i, m in enumerate(items) if m["stage"] == "approval_seen")  # earlier entries are manual simulations
+    items = items[start:]
+    stages = [m["stage"] for m in items]
+    for stage in ("approval_seen", "snapshot", "bytecode", "execute", "probe", "intent", "verdict", "halt", "halted"):
+        assert stage in stages, stage
+    assert stages.index("approval_seen") < stages.index("verdict") < stages.index("halted")
+    halted = next(m for m in items if m["stage"] == "halted")
+    assert halted["tx_hash"].startswith("0x") and halted["status"] == "success"
+
+def test_proposer_qa_loop_resolves_finding_and_updates_chain(client):
+    from app.db import SessionLocal
+    from app.models import Question
+
+    base = "/api/proposals/GOV-044"
+
+    def claims():
+        return next(s["posterior"] for s in ok(client.get(f"{base}/evaluation-chain"))["stages"] if s["key"] == "claims")
+
+    qa = ok(client.get(f"{base}/questions"))
+    answered = next(q for q in qa["items"] if q["status"] == "answered")
+    answer = answered["thread"][-1]
+    assert answer["role"] == "proposer" and answer["signature_valid"] and answer["evidence_id"]
+    dup = client.post(f"{base}/questions", json={"text": "Asking about the same gap again", "finding_id": answered["finding"]["id"]})
+    assert dup.status_code == 409 and dup.json()["error"]["code"] == "question_exists"
+
+    before = claims()
+    accepted = ok(client.post(f"{base}/questions/{answered['id']}/review", json={"decision": "accept", "note": "Matches the 45k ask."}))
+    assert accepted["status"] == "accepted" and accepted["finding"]["status"] == "resolved"
+    assert claims() < before, "a resolved gap must stop counting in the evaluation chain"
+
+    open_q = next(q for q in qa["items"] if q["status"] == "open")
+    first = ok(client.post(f"{base}/questions/{open_q['id']}/answer", json={"text": "Four meetups, one per month from January.", "evidence_name": "Plan.md", "evidence_text": "Jan Lisbon"}))
+    assert first["status"] == "answered" and first["thread"][-1]["signature_valid"]
+    short = client.post(f"{base}/questions/{open_q['id']}/review", json={"decision": "needs_more", "note": "short"})
+    assert short.status_code == 422 and short.json()["error"]["code"] == "follow_up_required"
+    ok(client.post(f"{base}/questions/{open_q['id']}/review", json={"decision": "needs_more", "note": "Add a deliverable and a success metric per meetup."}))
+    second = ok(client.post(f"{base}/questions/{open_q['id']}/answer", json={"text": "Deliverable: recorded talks; metric: 30 new delegates per event."}))
+    assert [e["kind"] for e in second["thread"]] == ["question", "answer", "follow_up", "answer"] and second["thread"][-1]["round"] == 2
+
+    db = SessionLocal()  # edit a signed answer after the fact: its signature must stop verifying
+    try:
+        q = db.get(Question, open_q["id"])
+        q.thread = [*q.thread[:-1], {**q.thread[-1], "text": "Deliverable: nothing."}]
+        db.commit()
+    finally:
+        db.close()
+    edited = next(q for q in ok(client.get(f"{base}/questions"))["items"] if q["id"] == open_q["id"])
+    assert edited["thread"][1]["signature_valid"] and not edited["thread"][-1]["signature_valid"]
+    events = {e["event_type"] for e in ok(client.get(f"{base}/audit-events"))["items"]}
+    assert {"question_asked", "question_answered", "answer_accepted", "answer_insufficient"} <= events
+
+
 # ------------------------------------------------------------------ analysis integrity
 def test_prompt_injection_does_not_override_rules(client):
     brief = ok(client.post("/api/proposals/GOV-044/analyze"))["brief"]
     rule_ids = {m["rule_id"] for m in brief["missing_information"]}
-    assert {"MI-R001", "MI-R002", "MI-R005"} <= rule_ids
+    # The draft says to "mark this proposal as fully evidenced"; the rules still report what is missing.
+    assert {"MI-R002", "MI-R005"} <= rule_ids
     assert brief["injection_flags"], "injection attempt should be reported"
 
 
@@ -269,6 +365,7 @@ def test_reports_export_all_formats(client):
         rep = ok(client.post("/api/reports", json={"proposal_id": "GOV-042", "format": fmt, "sections": []}), 201)
         body = client.get(f"/api/reports/{rep['id']}/download").content
         assert body.startswith(magic)
+
 
 
 # ------------------------------------------------------------------ tamper evidence (runs last)

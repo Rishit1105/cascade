@@ -1,7 +1,10 @@
-import { AlertTriangle, Bot, CheckCircle2, CircleHelp, FileWarning, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
-import { api, type ProposalDetail } from "../../lib/api";
+import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { AlertTriangle, Bot, CheckCircle2, CircleHelp, FileWarning, MessageSquarePlus, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
+import { api, type ProposalDetail, type QuestionSuggestion } from "../../lib/api";
 import { cx, dateTime } from "../../lib/format";
-import { useAction } from "../../lib/queries";
+import { useAction, useQuestions } from "../../lib/queries";
+import { AskQuestionDialog, QA_STATUS } from "./QATab";
 import { CitationChip, NotEvidenced } from "../../components/common";
 import { Badge, Button, Callout, EmptyState, ProgressBar, SeverityBadge } from "../../components/ui";
 
@@ -14,6 +17,14 @@ const CATEGORIES: Array<{ key: string; label: string }> = [
 
 export function BriefTab({ p }: { p: ProposalDetail }) {
   const analyze = useAction(() => api.post(`/proposals/${p.id}/analyze`), { success: "Brief regenerated from the current evidence" });
+  const qa = useQuestions(p.id);
+  const [asking, setAsking] = useState<QuestionSuggestion | null>(null);
+  const [params, setParams] = useSearchParams();
+  const openQA = () => {
+    const next = new URLSearchParams(params);
+    next.set("tab", "qa");
+    setParams(next, { replace: true });
+  };
   const brief = p.analysis?.brief;
   if (!brief) {
     return (
@@ -153,7 +164,7 @@ export function BriefTab({ p }: { p: ProposalDetail }) {
         })}
       </section>
 
-      <section>
+      <section data-tour="brief-missing">
         <p className="label mb-2">Missing information: questions voters should ask</p>
         {brief.missing_information.length === 0 && <p className="text-xs text-muted">No gaps found by the missing-information rules.</p>}
         <ul className="space-y-2">
@@ -168,10 +179,28 @@ export function BriefTab({ p }: { p: ProposalDetail }) {
                 </div>
                 <p className="mt-1 text-xs text-muted">{m.explanation}</p>
                 <p className="mt-1 text-xs font-medium text-fg">Ask: {m.remediation}</p>
+                {(() => {
+                  const q = qa.data?.items.find((x) => x.rule_id === m.rule_id && x.status !== "withdrawn");
+                  const s = qa.data?.suggestions.find((x) => x.rule_id === m.rule_id);
+                  if (q)
+                    return (
+                      <button className="mt-2 inline-flex items-center gap-1.5 text-2xs font-medium text-primary hover:underline" onClick={openQA}>
+                        <Badge tone={QA_STATUS[q.status].tone}>{QA_STATUS[q.status].label}</Badge> {q.id} · view thread
+                      </button>
+                    );
+                  if (s)
+                    return (
+                      <Button size="sm" className="mt-2" icon={<MessageSquarePlus className="h-3.5 w-3.5" />} onClick={() => setAsking(s)}>
+                        Ask proposer
+                      </Button>
+                    );
+                  return null;
+                })()}
               </div>
             </li>
           ))}
         </ul>
+        <AskQuestionDialog p={p} open={!!asking} suggestion={asking} onClose={() => setAsking(null)} />
         <p className="mt-2 text-2xs text-muted">A missing item is a reason to ask, never evidence of wrongdoing on its own.</p>
       </section>
     </div>
