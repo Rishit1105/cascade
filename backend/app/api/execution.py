@@ -124,6 +124,22 @@ def simulate(proposal_id: str, body: SimulationRequest, db: Session = Depends(ge
     return serialize_sim(sim)
 
 
+@router.post("/proposals/{proposal_id}/simulations/compare")
+def compare_implementations(proposal_id: str, db: Session = Depends(get_db), who: str = Depends(actor)) -> dict[str, Any]:
+    """Submitted vs reviewed implementation, simulated from the same state with the same probes."""
+    from ..services.simulation import compare_upgrade
+
+    p = proposals.get_proposal(db, proposal_id)
+    result = compare_upgrade(db, p)
+    sub, rev = result["submitted"], result["reviewed"]
+    audit.record(event_type="simulation_comparison",
+                 summary=f"Simulated {p.id} submitted vs reviewed implementation: {sub['verdict'].upper()} vs {rev['verdict'].upper()}"
+                         + (f"; first divergence at {result['divergence']['function']}." if result["divergence"] else "."),
+                 actor=who, source="ui", status="warning" if result["divergence"] else "info", proposal_id=p.id,
+                 details={"submitted_simulation": sub["simulation_id"], "reviewed_simulation": rev["simulation_id"], "start_block": result["start_block"]})
+    return result
+
+
 @router.get("/proposals/{proposal_id}/simulations")
 def list_simulations(proposal_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     proposals.get_proposal(db, proposal_id)

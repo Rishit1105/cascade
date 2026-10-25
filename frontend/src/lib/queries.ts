@@ -76,17 +76,17 @@ export const useAnchors = () => useQuery({ queryKey: ["anchors"], queryFn: () =>
 /** Mutation with success/error toasts and cache invalidation of everything chain-derived. */
 export function useAction<TVars, TResult>(
   fn: (vars: TVars) => Promise<TResult>,
-  opts: { success?: string | ((r: TResult) => string); tone?: (r: TResult) => ToastTone; invalidate?: QueryKey[]; onSuccess?: (r: TResult) => void; quiet?: boolean } = {},
+  opts: { success?: string | ((r: TResult) => string); tone?: (r: TResult) => ToastTone; invalidate?: QueryKey[]; onSuccess?: (r: TResult, vars: TVars) => void; quiet?: boolean } = {},
 ) {
   const qc = useQueryClient();
   const { toast } = useApp();
   return useMutation({
     mutationFn: fn,
-    onSuccess: (result) => {
+    onSuccess: (result, vars) => {
       const keys = opts.invalidate ?? [["proposal"], ["proposals"], ["governance"], ["evaluation"], ["overview"], ["audit"], ["alerts"], ["notifications"], ["findings"], ["attempts"], ["checks"], ["simulations"], ["graph"], ["conflicts"], ["voting"], ["delegates"], ["manifest"], ["dependencies"], ["treasury"], ["questions"]];
       keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
       if (opts.success && !opts.quiet) toast(opts.tone?.(result) ?? "success", typeof opts.success === "function" ? opts.success(result) : opts.success);
-      opts.onSuccess?.(result);
+      opts.onSuccess?.(result, vars);
     },
     onError: (err: unknown) => {
       const e = err as ApiError;

@@ -156,6 +156,29 @@ def test_treasury_impact_math(client):
     assert plus10["amount_base"] == str(550_000 * 10**6)
 
 
+def test_treasury_surface_matches_the_existing_projection(client):
+    base = "/api/proposals/GOV-042/treasury"
+    for release, amount in (("lump", None), ("milestones", None), ("milestones", str(620_000 * 10**6))):
+        params = {"release": release, "horizon": 24, **({"amount": amount} if amount else {})}
+        surface = ok(client.get(f"{base}/surface", params={**params, "overruns": "0,5,15,30,60"}))
+        assert [r["overrun_pct"] for r in surface["rows"]] == [0, 5, 15, 30, 60] and surface["months"] == list(range(25))
+        for row in surface["rows"]:
+            single = ok(client.get(base, params={**params, "overrun_pct": row["overrun_pct"]}))
+            assert row["after_base"] == [x["after_base"] for x in single["series"]], (release, amount, row["overrun_pct"])
+            assert surface["before_base"] == [x["before_base"] for x in single["series"]]
+            assert row["amount_base"] == single["active_amount_base"]
+            assert surface["available_before_base"] == single["available_before_base"]
+    # The assumption text states what the model does: configured tranches total the request, so the overrun lands on the last one.
+    note = ok(client.get(f"{base}/surface", params={"release": "milestones"}))["overrun_note"]
+    assert "entire overrun is added to the final tranche" in note
+    tranches = ok(client.get(base, params={"release": "milestones", "overrun_pct": 30}))["schedule"]
+    assert [int(t["amount_base"]) // 10**6 for t in tranches] == [150_000, 200_000, 300_000]
+    # Missing milestone data is reported, never silently replaced.
+    assert ok(client.get("/api/proposals/GOV-044/treasury/surface", params={"release": "milestones"}))["schedule_issues"]
+    assert client.get(f"{base}/surface", params={"overruns": "0,250"}).status_code == 422
+    assert client.get(f"{base}/surface", params={"overruns": "x"}).status_code == 422
+
+
 # ------------------------------------------------------------------ adversarial execution
 @pytest.mark.parametrize(
     "scenario,revert",
@@ -227,6 +250,32 @@ def test_simulation_catches_obfuscated_upgrade(client):
 def test_reviewed_implementation_passes(client):
     sim = ok(client.post("/api/proposals/GOV-043/simulations", json={"scenario": "reviewed_implementation"}), 201)
     assert sim["verdict"] == "pass"
+
+
+def test_implementation_comparison_is_isolated_and_explains_divergence(client):
+    from app.db import SessionLocal
+    from app.models import Finding
+
+    def finding_state():
+        db = SessionLocal()
+        try:
+            return sorted((f.id, f.status, f.superseded_at is None) for f in db.query(Finding).filter(Finding.proposal_id == "GOV-043"))
+        finally:
+            db.close()
+
+    before = finding_state()
+    c = ok(client.post("/api/proposals/GOV-043/simulations/compare"))
+    sub, rev = c["submitted"], c["reviewed"]
+    assert c["same_start_block"] and sub["status"] == rev["status"] == "completed"
+    assert sub["verdict"] == "block" and rev["verdict"] in ("pass", "flag")
+    assert sub["implementation"] != rev["implementation"]
+    assert {x["address"].lower() for x in sub["callers"]} <= {x["address"].lower() for x in rev["callers"]}, "both sides must face the same callers"
+    assert [p["function"] for p in sub["fund_moving_probes"]] == ["syncAccounting()"] and rev["fund_moving_probes"] == []
+    d = c["divergence"]
+    assert d["kind"] == "fund_movement" and d["function"] == "syncAccounting()" and d["reviewed"]["outflows"] == []
+    assert d["submitted"]["outflows"][0]["amount"] == c["vault_balance_start"], "the probe drained the vault's observed starting balance"
+    assert finding_state() == before, "a comparison must not change findings"
+    assert ok(client.post("/api/proposals/GOV-042/simulations/compare"), 409)["error"]["code"] == "no_reviewed_implementation"
 
 
 def test_simulation_leaves_chain_untouched(client):

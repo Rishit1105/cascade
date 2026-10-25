@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -12,6 +12,8 @@ import { useAction, useAttempts, useGovernance, useManifest, useProposal, useSce
 import { ProposalPicker } from "../components/common";
 import { DiffViewer } from "../components/DiffViewer";
 import { ManifestBuilder } from "../components/ManifestBuilder";
+import { ExecutionTunnel } from "../components/ExecutionTunnel";
+import { ImplementationComparison } from "../components/ImplementationComparison";
 import { ConfirmDialog } from "../components/overlays";
 import { Badge, Button, Callout, EmptyState, ErrorState, Hash, LoadingBlock, Panel, SeverityBadge, StatusBadge, Tabs, TxLink } from "../components/ui";
 import { LiveIndicator, SentinelActivity } from "../components/SentinelActivity";
@@ -73,11 +75,6 @@ export default function Guardian() {
     next.set("scenario", s);
     setParams(next, { replace: true });
   };
-  useEffect(() => {
-    setCheck(null);
-    setSimResult(null);
-    setAttempt(null);
-  }, [pid, scenario]);
   // Links (and the guided tour) can switch scenario and view while the page is open.
   const urlScenario = params.get("scenario");
   const urlView = params.get("view") as CenterTab | null;
@@ -108,6 +105,16 @@ export default function Guardian() {
       return undefined;
     }
   }, [scenario, payloadQ.data, customText]);
+  // Results belong to one exact payload. Switching scenario or editing the payload clears them, and a
+  // response that arrives for a payload no longer on screen is discarded instead of shown as current.
+  const payloadKey = `${pid}|${scenario}|${submitted ? JSON.stringify(submitted) : ""}`;
+  const keyRef = useRef(payloadKey);
+  keyRef.current = payloadKey;
+  useEffect(() => {
+    setCheck(null);
+    setSimResult(null);
+    setAttempt(null);
+  }, [payloadKey]);
   const approvedPayload = manifest.data?.payload;
   const rows = useMemo(
     () => (approvedPayload && submitted ? lineDiff(JSON.stringify(approvedPayload, null, 2).split("\n"), JSON.stringify(submitted, null, 2).split("\n")) : []),
@@ -124,22 +131,24 @@ export default function Guardian() {
   (report?.intent?.assertions ?? []).forEach((a: any) => (statuses[a.kind + "|" + a.quote] = a.status));
 
   const body = (): Record<string, unknown> => (scenario === "custom" ? { payload: submitted, scenario: "custom" } : { scenario });
-  const runCheck = useAction(() => api.post<ExecutionCheck>(`/proposals/${pid}/execution-checks`, body()), {
+  const runCheck = useAction((_key: string) => api.post<ExecutionCheck>(`/proposals/${pid}/execution-checks`, body()), {
     success: (c) => `Advisory check: ${c.status}`,
-    onSuccess: setCheck,
+    onSuccess: (c, key) => key === keyRef.current && setCheck(c),
     invalidate: [["audit"], ["checks"], ["evaluation"]],
   });
-  const simulate = useAction(() => api.post<Simulation>(`/proposals/${pid}/simulations`, scenario === "safe" ? {} : body()), {
+  const simulate = useAction((_key: string) => api.post<Simulation>(`/proposals/${pid}/simulations`, scenario === "safe" ? {} : body()), {
     success: (s) => `Simulation verdict: ${s.verdict.toUpperCase()}`,
     tone: (s) => (s.verdict === "pass" ? "success" : "warning"),
-    onSuccess: setSimResult,
+    onSuccess: (s, key) => key === keyRef.current && setSimResult(s),
   });
-  const execute = useAction(() => api.post<{ attempt: ExecutionAttempt; check: ExecutionCheck }>(`/proposals/${pid}/demo-execution`, body()), {
+  const execute = useAction((_key: string) => api.post<{ attempt: ExecutionAttempt; check: ExecutionCheck }>(`/proposals/${pid}/demo-execution`, body()), {
     success: (r) => (r.attempt.outcome === "executed" ? "Executed through the guard" : r.attempt.outcome === "rejected" ? `Rejected by the contract: ${r.attempt.revert?.name}` : "Not sent"),
     tone: (r) => (r.attempt.outcome === "executed" ? "success" : "warning"),
-    onSuccess: (r) => {
-      setAttempt(r.attempt);
-      setCheck(r.check);
+    onSuccess: (r, key) => {
+      if (key === keyRef.current) {
+        setAttempt(r.attempt);
+        setCheck(r.check);
+      }
       setConfirmExec(false);
     },
   });
@@ -193,6 +202,21 @@ export default function Guardian() {
           </button>
           {scenarioInfo && <span className="ml-auto px-2 text-xs text-muted">{scenarioInfo.description} Basis: {scenarioInfo.basis} manifest v{scenarioInfo.version}.</span>}
         </div>
+      )}
+
+      {manifest.data?.manifest && (
+        <ExecutionTunnel
+          p={p}
+          gov={gov.data}
+          scenario={scenario}
+          scenarioLabel={scenarioInfo?.label ?? (scenario === "custom" ? "Custom payload" : scenario)}
+          check={check}
+          attempt={attempt}
+          sim={sim}
+          checking={runCheck.isPending && runCheck.variables === payloadKey}
+          executing={execute.isPending && execute.variables === payloadKey}
+          simulating={simulate.isPending && simulate.variables === payloadKey}
+        />
       )}
 
       <div className="grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)_380px]">
@@ -293,8 +317,9 @@ export default function Guardian() {
           )}
           {tab === "bytecode" && (
             <>
+              {pid && <ImplementationComparison proposalId={pid} />}
               {!upgrade && (
-                <EmptyState icon={<Cpu className="h-5 w-5" />} title="No simulation yet" body="Run “Simulate contract run” to disassemble the submitted implementation and probe it." action={<Button variant="primary" loading={simulate.isPending} onClick={() => simulate.mutate(undefined)}>Simulate contract run</Button>} />
+                <EmptyState icon={<Cpu className="h-5 w-5" />} title="No simulation yet" body="Run “Simulate contract run” to disassemble the submitted implementation and probe it." action={<Button variant="primary" loading={simulate.isPending} onClick={() => simulate.mutate(payloadKey)}>Simulate contract run</Button>} />
               )}
               {upgrade && <BytecodeView upgrade={upgrade} />}
             </>
@@ -452,10 +477,10 @@ export default function Guardian() {
         <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2 px-4 py-2.5 md:px-6">
           <span className="hidden text-xs text-muted lg:inline">{p?.id} · {scenarioInfo?.label ?? (scenario === "custom" ? "Custom payload" : scenario)}</span>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button icon={<ShieldCheck className="h-4 w-4" />} loading={runCheck.isPending} disabled={!submitted} onClick={() => runCheck.mutate(undefined)}>
+            <Button icon={<ShieldCheck className="h-4 w-4" />} loading={runCheck.isPending} disabled={!submitted} onClick={() => runCheck.mutate(payloadKey)}>
               Run preflight check
             </Button>
-            <Button icon={<FlaskConical className="h-4 w-4" />} loading={simulate.isPending} disabled={!submitted} onClick={() => simulate.mutate(undefined)}>
+            <Button icon={<FlaskConical className="h-4 w-4" />} loading={simulate.isPending} disabled={!submitted} onClick={() => simulate.mutate(payloadKey)}>
               Simulate contract run
             </Button>
             <Button variant="dark" data-tour="execute" icon={<Play className="h-4 w-4" />} disabled={!submitted} onClick={() => setConfirmExec(true)}>
@@ -477,7 +502,7 @@ export default function Guardian() {
       <ConfirmDialog
         open={confirmExec}
         onClose={() => setConfirmExec(false)}
-        onConfirm={() => execute.mutate(undefined)}
+        onConfirm={() => execute.mutate(payloadKey)}
         loading={execute.isPending}
         title="Send a real transaction to the ExecutionGuard?"
         description={

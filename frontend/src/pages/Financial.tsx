@@ -8,6 +8,7 @@ import { useAction, useDependencies, useFindings, useManifest, useTreasury, useT
 import { ProposalPicker } from "../components/common";
 import { Badge, Button, Callout, DemoBadge, ErrorState, LoadingBlock, Panel, Segmented, SeverityBadge, Tabs } from "../components/ui";
 import { toBase } from "./proposal/Forms";
+import { TreasuryExplorer } from "../components/TreasuryExplorer";
 
 type Tab = "impact" | "inputs";
 
@@ -37,6 +38,8 @@ function Impact({ pid }: { pid: string }) {
   const [overrun, setOverrun] = useState(0);
   const [release, setRelease] = useState<"lump" | "milestones">("lump");
   const [horizon, setHorizon] = useState(18);
+  const [view, setView] = useState<"2d" | "3d">("2d");
+  const [noWebgl, setNoWebgl] = useState<string | null>(null);
   const [debounced, setDebounced] = useState({ amount, overrun });
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced({ amount, overrun }), 180);
@@ -65,8 +68,39 @@ function Impact({ pid }: { pid: string }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <Panel title="Treasury impact projection" subtitle={`Available mUSDC after commitments, ${horizon} months. Before vs after this proposal.`}>
+        <div className={cx("grid gap-4", view === "2d" && "lg:grid-cols-[minmax(0,1fr)_300px]")}>
+          <Panel
+            title={view === "3d" ? "Treasury balance projection" : "Treasury impact projection"}
+            subtitle={view === "3d" ? `Available mUSDC after commitments across time and cost-overrun scenarios, ${horizon} months.` : `Available mUSDC after commitments, ${horizon} months. Before vs after this proposal.`}
+            actions={
+              <Segmented
+                size="sm"
+                value={view}
+                onChange={(v) => {
+                  setView(v);
+                  if (v === "3d") setNoWebgl(null);
+                }}
+                options={[{ id: "2d", label: "2D" }, { id: "3d", label: "3D" }]}
+              />
+            }
+          >
+            {noWebgl && view === "2d" && <div className="mb-3"><Callout tone="warning" title="3D view unavailable">{noWebgl} Showing the 2D chart instead.</Callout></div>}
+            {view === "3d" ? (
+              <TreasuryExplorer
+                pid={pid}
+                amount={debounced.amount}
+                overrun={debounced.overrun}
+                release={release}
+                horizon={horizon}
+                requestedBase={d.requested_base}
+                runwayBefore={d.runway_before_months}
+                runwayAfter={d.runway_after_months}
+                onUnavailable={(reason) => {
+                  setNoWebgl(reason);
+                  setView("2d");
+                }}
+              />
+            ) : (
             <div className="h-[290px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chart} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
@@ -87,6 +121,7 @@ function Impact({ pid }: { pid: string }) {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            )}
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
                 <div className="mb-1 flex justify-between text-xs"><span className="font-medium">Grant amount</span><span className="font-mono">{amountUnits.toLocaleString("en-US")} mUSDC</span></div>

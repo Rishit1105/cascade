@@ -271,6 +271,7 @@ class _Sim:
         approved_manifest: dict[str, Any] | None,
         declared_text: str,
         reference_impls: dict[str, str] | None = None,
+        extra_callers: list[tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
         chain, L = self.chain, self.labeler
         decoded = [describe_action(a, L) for a in actions]
@@ -313,6 +314,9 @@ class _Sim:
             embedded_new = [a for a in bdiff["embedded_addresses_added"] if a.lower() not in known_contracts]
             callers = [("unprivileged account", PROBE_ACCOUNT), ("proposer", self.proposal.proposer_address)]
             callers += [("address embedded in new code", a) for a in embedded_new]
+            # Extra callers (e.g. from a comparison run) so two implementations are probed by the same accounts.
+            seen = {a.lower() for _, a in callers}
+            callers += [(r, a) for r, a in (extra_callers or []) if a.lower() not in seen and not seen.add(a.lower())]
             holders.update(embedded_new)
             upgrades.append(
                 {
@@ -757,6 +761,7 @@ def run_simulation(
     scenario: str | None,
     trigger: str = "manual",
     reference_impls: dict[str, str] | None = None,
+    extra_callers: list[tuple[str, str]] | None = None,
 ) -> Simulation:
     deployment = runtime.require_deployment()
     chain = runtime.chain
@@ -777,7 +782,7 @@ def run_simulation(
         live.activity(proposal.id, "snapshot", f"Snapshot of the chain at block {sim.chain_block}; nothing below touches real state.", simulation_id=sim.id)
         try:
             refs = reference_impls if reference_impls is not None else reviewed_implementations(proposal, version, actions)
-            report = _Sim(db, deployment, proposal, sim.id).run(actions, approved_manifest, declared_text, refs)
+            report = _Sim(db, deployment, proposal, sim.id).run(actions, approved_manifest, declared_text, refs, extra_callers)
             sim.status, sim.verdict, sim.report = "completed", report["verdict"], report
         except Exception as exc:  # report failure explicitly; never claim a pass
             log.exception("simulation failed for %s", proposal.id)
@@ -810,4 +815,110 @@ def serialize(sim: Simulation) -> dict[str, Any]:
         "started_at": iso(sim.started_at),
         "finished_at": iso(sim.finished_at),
         "report": sim.report,
+    }
+
+
+def _comparison_side(sim: Simulation) -> dict[str, Any]:
+    report = sim.report or {}
+    up = (report.get("upgrades") or [None])[0] or {}
+    new = up.get("new_analysis") or {}
+    probes = up.get("probes_after") or []
+    return {
+        "simulation_id": sim.id,
+        "status": sim.status,
+        "verdict": sim.verdict,
+        "error": report.get("error"),
+        "start_block": sim.chain_block,
+        "summary": report.get("summary"),
+        "implementation": up.get("new_implementation"),
+        "implementation_label": up.get("new_label"),
+        "codehash": new.get("codehash"),
+        "code_size": new.get("size"),
+        "embedded_unknown": up.get("embedded_unknown") or [],
+        "vault": up.get("proxy"),
+        "vault_label": up.get("proxy_label"),
+        "upgrade_status": next((a["status"] for a in report.get("actions", []) if a.get("index") == up.get("action_index")), None),
+        "callers": up.get("callers") or [],
+        "probes": probes,
+        "fund_moving_probes": [p for p in probes if p.get("outflows")],
+        "control_probes": [p for p in probes if p.get("control_changed")],
+        "balance_changes": report.get("balance_changes", []),
+        "findings": report.get("findings", []),
+        "assertions": (report.get("intent") or {}).get("assertions", []),
+        "limitations": report.get("limitations", LIMITATIONS),
+    }
+
+
+def _first_divergence(sub: dict[str, Any], rev: dict[str, Any]) -> dict[str, Any] | None:
+    """First probe (same caller, same function) whose observed outcome differs, fund movement first."""
+    reviewed = {(p["caller"].lower(), p["function"]): p for p in rev["probes"]}
+    candidates = []
+    for order, p in enumerate(sub["probes"]):
+        other = reviewed.get((p["caller"].lower(), p["function"]))
+        moved, other_moved = bool(p.get("outflows")), bool(other and other.get("outflows"))
+        control, other_control = bool(p.get("control_changed")), bool(other and other.get("control_changed"))
+        if moved != other_moved:
+            rank = 0
+        elif control != other_control:
+            rank = 1
+        elif other is None:
+            rank = 2
+        elif p["status"] != other["status"]:
+            rank = 3
+        else:
+            continue
+        candidates.append((rank, order, p, other))
+    if not candidates:
+        return None
+    rank, _, p, other = min(candidates, key=lambda c: (c[0], c[1]))
+    kind = ["fund_movement", "control_change", "function_only_in_submitted", "call_status"][rank]
+    return {"kind": kind, "function": p["function"], "caller": p["caller"], "caller_role": p["caller_role"], "caller_label": p.get("caller_label"),
+            "submitted": p, "reviewed": other}
+
+
+def compare_upgrade(db: Session, proposal: Proposal) -> dict[str, Any]:
+    """Simulate the submitted and the reviewed implementation from the same starting block with the
+    same probe callers, each inside its own snapshot (evm_revert after each). No findings are
+    changed and the deployed implementation is never switched."""
+    from ..errors import Conflict
+    from .execution import available_scenarios, scenario_payload
+    from .manifests import parse_payload
+    from .proposals import approved_version, latest_version
+    from .sentinel import declared_text
+
+    if "reviewed_implementation" not in {s["id"] for s in available_scenarios(proposal)}:
+        raise Conflict("no_reviewed_implementation", f"{proposal.id} has no earlier reviewed implementation to compare against.")
+    basis = approved_version(proposal) or latest_version(proposal)
+    text = declared_text(proposal, basis)
+    chain = runtime.chain
+    with chain.lock:  # nothing else may move the chain between the two runs
+        submitted_payload = parse_payload(scenario_payload(proposal, "safe"))
+        sub = run_simulation(db, proposal, actions=list(submitted_payload.actions), approved_manifest=basis.manifest, declared_text=text,
+                             version=submitted_payload.version, manifest_hash=None, scenario="comparison: submitted implementation",
+                             trigger="comparison", reference_impls={})
+        sub_up = ((sub.report or {}).get("upgrades") or [{}])[0]
+        callers = [("address embedded in the submitted code" if c["role"] == "address embedded in new code" else c["role"], c["address"])
+                   for c in sub_up.get("callers", [])]
+        vault = sub_up.get("proxy")
+        vault_start = _balance_of(chain, runtime.require_deployment().c("usdc"), vault) if vault else None  # snapshot already reverted
+        reviewed_payload = parse_payload(scenario_payload(proposal, "reviewed_implementation"))
+        rev = run_simulation(db, proposal, actions=list(reviewed_payload.actions), approved_manifest=basis.manifest, declared_text=text,
+                             version=reviewed_payload.version, manifest_hash=None, scenario="comparison: reviewed implementation",
+                             trigger="comparison", reference_impls={}, extra_callers=callers)
+    submitted, reviewed = _comparison_side(sub), _comparison_side(rev)
+    both_ok = sub.status == "completed" and rev.status == "completed"
+    return {
+        "proposal_id": proposal.id,
+        "basis_version": basis.version,
+        "same_start_block": sub.chain_block == rev.chain_block,
+        "start_block": sub.chain_block,
+        "vault": vault,
+        "vault_label": sub_up.get("proxy_label"),
+        "vault_balance_start": str(vault_start) if vault_start is not None else None,
+        "vault_balance_start_display": format_token(vault_start, runtime.require_deployment().c("usdc")) if vault_start is not None else None,
+        "submitted": submitted,
+        "reviewed": reviewed,
+        "divergence": _first_divergence(submitted, reviewed) if both_ok else None,
+        "note": "Simulation on a local snapshot, reverted after each run. Both sides start from the same block and are probed by the same callers. "
+                "No issue observed means none was observed under these probes, not that the code is safe.",
     }

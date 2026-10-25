@@ -325,6 +325,22 @@ def treasury_impact(proposal_id: str, amount: str | None = None, overrun_pct: in
     return treasury.impact(db, p, amount_override=override, overrun_pct=overrun_pct, release=release, horizon_months=horizon)
 
 
+@router.get("/proposals/{proposal_id}/treasury/surface")
+def treasury_surface(proposal_id: str, overruns: str = Query(default="0,5,10,15,20,25,30,35,40,45,50,55,60", max_length=200),
+                     amount: str | None = None, release: str = "lump", horizon: int = Query(default=18, ge=3, le=36),
+                     db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Batch of the treasury projection across overrun scenarios (one request for the whole 3D surface)."""
+    from ..services.manifests import PayloadError, parse_uint
+
+    p = proposals.get_proposal(db, proposal_id)
+    try:
+        override = parse_uint(amount, "amount") if amount not in (None, "") else None
+        pcts = [int(x) for x in overruns.split(",") if x.strip()]
+    except (PayloadError, ValueError) as exc:
+        raise ValidationFailed("invalid_surface_request", str(exc)) from exc
+    return treasury.surface(db, p, amount_override=override, overruns=pcts, release=release, horizon_months=horizon)
+
+
 @router.get("/proposals/{proposal_id}/dependencies")
 def dependencies(proposal_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     p = proposals.get_proposal(db, proposal_id)
