@@ -7,6 +7,7 @@ import { cx, dateTime, timeAgo, titleCase } from "../lib/format";
 import { useAction, useAnchors, useAuditEvents, useProposals } from "../lib/queries";
 import { Modal } from "../components/overlays";
 import { Badge, Button, Callout, EmptyState, ErrorState, Hash, LoadingBlock, Panel, Tabs, TxLink, VerificationBadge } from "../components/ui";
+import { AnimatedNumber, GrowBar } from "../lib/motion";
 
 const DOT: Record<string, string> = { success: "bg-primary", failure: "bg-danger", warning: "bg-warning", info: "bg-info" };
 const RING: Record<string, string> = { success: "border-primary", failure: "border-danger", warning: "border-warning", info: "border-info" };
@@ -77,7 +78,7 @@ export default function AuditTimeline() {
       {events.isLoading && <LoadingBlock rows={8} />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-4">
           {tab === "timeline" && (
             <Panel title="Audit trail timeline" subtitle={`${items.length} event(s) · oldest on the left · click a node to drill in`} bodyClassName="px-0">
               {items.length === 0 && !events.isLoading && <EmptyState title="No events match the filters" />}
@@ -104,11 +105,6 @@ export default function AuditTimeline() {
                   })}
                 </div>
               </div>
-              {current && (
-                <div className="mx-4 rounded-xl border border-line bg-subtle/40 p-4 animate-fade-in">
-                  <EventDetail e={current} />
-                </div>
-              )}
             </Panel>
           )}
           {tab === "ledger" && (
@@ -134,9 +130,10 @@ export default function AuditTimeline() {
               {current && <div className="m-4 rounded-xl border border-line bg-subtle/40 p-4"><EventDetail e={current} /></div>}
             </Panel>
           )}
+          {tab === "timeline" && items.length > 0 && <LedgerAnalytics items={items} onPick={setSelected} selected={current} />}
         </div>
 
-        <Panel title="Event logs & evidence ledger" subtitle="event_hash = sha256(canonical(event) ‖ prev_hash)">
+        <Panel className="h-full" title="Event logs & evidence ledger" subtitle="event_hash = sha256(canonical(event) ‖ prev_hash)">
           <div className="mb-3 grid grid-cols-2 gap-2">
             <a className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line text-sm font-medium hover:bg-subtle" href={`/api/audit/export?format=json${proposal ? `&proposal=${proposal}` : ""}`} download>
               <Download className="h-3.5 w-3.5" /> Export JSON
@@ -230,6 +227,78 @@ function EventDetail({ e }: { e: AuditEvent }) {
           <pre className="mt-1.5 max-h-[220px] overflow-auto rounded-lg bg-ink p-3 font-mono text-[11px] text-[#C9D6E2] scroll-thin">{JSON.stringify(e.details, null, 2)}</pre>
         </details>
       )}
+    </div>
+  );
+}
+
+/** Ledger at a glance, computed from the events already loaded; the inspector shows the chosen (or newest) event. */
+function LedgerAnalytics({ items, selected, onPick }: { items: AuditEvent[]; selected: AuditEvent | null; onPick: (id: string) => void }) {
+  const stats = useMemo(() => {
+    const chain = items.filter((e) => e.verification === "chain-confirmed").length;
+    const byStatus = { success: 0, warning: 0, failure: 0, info: 0 } as Record<string, number>;
+    const byType = new Map<string, number>();
+    const byDay = new Map<string, { chain: number; off: number }>();
+    for (const e of items) {
+      byStatus[e.status] = (byStatus[e.status] ?? 0) + 1;
+      byType.set(e.event_type, (byType.get(e.event_type) ?? 0) + 1);
+      const day = e.occurred_at.slice(5, 10);
+      const d = byDay.get(day) ?? { chain: 0, off: 0 };
+      if (e.verification === "chain-confirmed") d.chain += 1;
+      else d.off += 1;
+      byDay.set(day, d);
+    }
+    const types = [...byType.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-14);
+    return { chain, byStatus, types, days, actors: new Set(items.map((e) => e.actor)).size };
+  }, [items]);
+  const focus = selected ?? items[0];
+  const maxDay = Math.max(1, ...stats.days.map(([, d]) => d.chain + d.off));
+  const maxType = Math.max(1, ...stats.types.map(([, n]) => n));
+  const tiles: Array<[string, string, string]> = [
+    ["Events", String(items.length), "text-fg"],
+    ["Chain-confirmed", `${Math.round((stats.chain / items.length) * 100)}%`, "text-primary"],
+    ["Failures & warnings", String(stats.byStatus.failure + stats.byStatus.warning), "text-danger"],
+    ["Distinct actors", String(stats.actors), "text-info"],
+  ];
+  return (
+    <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <Panel title="Ledger at a glance" subtitle="Computed from the events matching the current filters">
+        <div className="grid grid-cols-2 gap-2">
+          {tiles.map(([k, v, c]) => (
+            <div key={k} className="rounded-lg border border-line bg-subtle/40 px-3 py-2.5">
+              <p className="text-2xs font-medium text-muted">{k}</p>
+              <p className={cx("mt-0.5 text-[22px] font-semibold leading-tight tracking-[-0.02em]", c)}><AnimatedNumber value={v} /></p>
+            </div>
+          ))}
+        </div>
+        <p className="label mb-1.5 mt-4">Activity by day</p>
+        <div className="flex h-[72px] items-end gap-1" aria-label="Events per day">
+          {stats.days.map(([day, d]) => (
+            <div key={day} className="flex flex-1 flex-col justify-end gap-[2px]" title={`${day}: ${d.chain} chain-confirmed, ${d.off} off-chain`}>
+              <div className="rounded-t-sm bg-info/45" style={{ height: `${(d.off / maxDay) * 64}px` }} />
+              <div className="rounded-b-sm bg-primary" style={{ height: `${(d.chain / maxDay) * 64}px` }} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] text-faint"><span>{stats.days[0]?.[0]}</span><span>{stats.days[stats.days.length - 1]?.[0]}</span></div>
+        <p className="label mb-1.5 mt-4">Most frequent events</p>
+        <ul className="space-y-1.5">
+          {stats.types.map(([type, n]) => (
+            <li key={type} className="text-xs">
+              <div className="flex justify-between"><span className="truncate text-fg">{titleCase(type)}</span><span className="font-mono text-muted">{n}</span></div>
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-subtle"><GrowBar pct={(n / maxType) * 100} className="h-full rounded-full bg-primary/70" /></div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+      <Panel title={selected ? "Event inspector" : "Newest event"} subtitle={selected ? "Selected on the timeline" : "Click any node on the timeline to inspect it"}>
+        {focus && <EventDetail e={focus} />}
+        {!selected && items[1] && (
+          <button className="mt-3 text-xs font-medium text-primary hover:underline" onClick={() => onPick(items[1].id)}>
+            Inspect the previous event →
+          </button>
+        )}
+      </Panel>
     </div>
   );
 }

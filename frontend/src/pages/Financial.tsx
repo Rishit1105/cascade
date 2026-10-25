@@ -215,7 +215,7 @@ function Impact({ pid }: { pid: string }) {
         </Panel>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 xl:sticky xl:top-[72px] xl:self-start">
         <Panel title="On-chain audit details" subtitle="What will execute, read from the committed manifest.">
           {manifest.data?.manifest ? (
             <div className="space-y-2">

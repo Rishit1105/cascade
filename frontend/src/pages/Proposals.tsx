@@ -76,7 +76,7 @@ export default function Proposals() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)_340px]">
-      <aside className="flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 xl:sticky xl:top-[72px] xl:-mx-1 xl:max-h-[calc(100vh-88px)] xl:self-start xl:overflow-y-auto xl:px-1 xl:pb-1">
         <div className="flex items-center justify-between">
           <h1 className="text-[17px] font-semibold">Proposals</h1>
           <Button size="sm" variant="primary" icon={<FilePlus2 className="h-3.5 w-3.5" />} onClick={() => setCreating(true)}>
@@ -89,7 +89,7 @@ export default function Proposals() {
         </div>
         <div className="flex flex-wrap gap-1">
           {STATUS_FILTERS.map((s) => (
-            <button key={s.id} onClick={() => setStatus(s.id)} className={cx("rounded-md border px-2 py-0.5 text-2xs font-semibold", status === s.id ? "border-fg bg-fg text-surface" : "border-line text-muted hover:text-fg")}>
+            <button key={s.id} onClick={() => setStatus(s.id)} className={cx("cursor-pointer rounded-md border px-2 py-0.5 text-2xs font-semibold transition-colors duration-200", status === s.id ? "border-fg bg-fg text-surface" : "border-line text-muted hover:text-fg")}>
               {s.label}
             </button>
           ))}

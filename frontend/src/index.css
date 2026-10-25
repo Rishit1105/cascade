@@ -132,6 +132,46 @@
   font-size: 11px;
 }
 
+/* Hero-card polish: a cursor-following glow and a thin semantic accent along the top edge. */
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgb(var(--primary) / 0.1), transparent 65%);
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+.accent-primary::after,
+.accent-warning::after,
+.accent-danger::after,
+.accent-info::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  opacity: 0.85;
+}
+.accent-primary::after { background: linear-gradient(90deg, rgb(var(--primary)), rgb(var(--primary) / 0)); }
+.accent-warning::after { background: linear-gradient(90deg, rgb(var(--warning)), rgb(var(--warning) / 0)); }
+.accent-danger::after { background: linear-gradient(90deg, rgb(var(--danger)), rgb(var(--danger) / 0)); }
+.accent-info::after { background: linear-gradient(90deg, rgb(var(--info)), rgb(var(--info) / 0)); }
+
+/* Soft shimmer for loading placeholders. */
+@keyframes dg-shimmer {
+  to { background-position: -200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, rgb(var(--subtle)) 0%, rgb(var(--line) / 0.7) 40%, rgb(var(--subtle)) 80%);
+  background-size: 200% 100%;
+  animation: dg-shimmer 1.4s linear infinite;
+}
+
 /* Presentation visualizations (execution tunnel, implementation comparison): a graphite surface in
    both themes. Re-scoping the theme tokens keeps every existing component (badges, hashes, tx links)
    readable on it: mint = passed, amber = warning, coral = mismatch / blocked. */

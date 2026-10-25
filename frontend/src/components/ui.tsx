@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { AnimatedNumber, ENTER, SPRING } from "../lib/motion";
 import { AlertTriangle, Check, CheckCircle2, CircleDashed, Copy, Info, Loader2, OctagonX, ShieldAlert, XCircle } from "lucide-react";
 import { cx, shortAddr, shortHash } from "../lib/format";
 import { useApp } from "../lib/app";
@@ -29,7 +31,7 @@ export function Button({
     <button
       type="button"
       className={cx(
-        "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex cursor-pointer select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-sm",
         VARIANTS[variant],
         className,
@@ -175,7 +177,14 @@ export function Panel({
   tour?: string;
 }) {
   return (
-    <section data-tour={tour} className={cx(dark ? "rounded-xl border border-ink bg-ink text-white shadow-card dark:border-line" : "panel", "flex min-w-0 flex-col", className)}>
+    <motion.section
+      data-tour={tour}
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-30px" }}
+      transition={ENTER}
+      className={cx(dark ? "rounded-xl border border-ink bg-ink text-white shadow-card dark:border-line" : "panel", "flex min-w-0 flex-col", className)}
+    >
       {(title || actions) && (
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pb-2.5 pt-3.5">
           <div className="min-w-0 flex-1 basis-[220px]">
@@ -189,7 +198,7 @@ export function Panel({
         </header>
       )}
       <div className={cx("min-h-0 flex-1 px-4 pb-4", bodyClassName)}>{children}</div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -210,6 +219,7 @@ export function PageHeader({ title, subtitle, actions, children }: { title: Reac
 
 export function Tabs<T extends string>({ tabs, value, onChange, className }: { tabs: Array<{ id: T; label: ReactNode; count?: number }>; value: T; onChange: (v: T) => void; className?: string }) {
   const list = useRef<HTMLDivElement>(null);
+  const indicator = useId();
   useEffect(() => {
     // When the tabs overflow, keep the selected one visible (it may have been chosen from a link).
     const el = list.current?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -224,12 +234,13 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
           aria-selected={value === t.id}
           onClick={() => onChange(t.id)}
           className={cx(
-            "relative -mb-px inline-flex h-9 items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 text-sm font-medium transition-colors",
-            value === t.id ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg",
+            "relative -mb-px inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap px-2.5 text-sm font-medium transition-colors duration-200",
+            value === t.id ? "text-fg" : "text-muted hover:text-fg",
           )}
         >
           {t.label}
-          {t.count !== undefined && <span className="rounded-full bg-subtle px-1.5 text-2xs font-semibold text-muted">{t.count}</span>}
+          {t.count !== undefined && <span className={cx("rounded-full px-1.5 text-2xs font-semibold transition-colors", value === t.id ? "bg-primary/12 text-primary" : "bg-subtle text-muted")}>{t.count}</span>}
+          {value === t.id && <motion.span layoutId={indicator} transition={SPRING} className="absolute inset-x-1 -bottom-px h-[2px] rounded-full bg-fg" />}
         </button>
       ))}
     </div>
@@ -237,36 +248,53 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
 }
 
 export function Segmented<T extends string>({ options, value, onChange, size = "md" }: { options: Array<{ id: T; label: ReactNode }>; value: T; onChange: (v: T) => void; size?: "sm" | "md" }) {
+  const pill = useId();
   return (
-    <div className="inline-flex rounded-lg border border-line bg-subtle p-0.5">
+    <div className="inline-flex rounded-lg border border-line bg-subtle p-0.5" role="group">
       {options.map((o) => (
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
+          aria-pressed={value === o.id}
           className={cx(
-            "rounded-md px-2.5 font-medium transition-colors",
+            "relative cursor-pointer rounded-md px-2.5 font-medium transition-colors duration-200",
             size === "sm" ? "h-6 text-xs" : "h-7 text-sm",
-            value === o.id ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg",
+            value === o.id ? "text-fg" : "text-muted hover:text-fg",
           )}
         >
-          {o.label}
+          {value === o.id && <motion.span layoutId={pill} transition={SPRING} className="absolute inset-0 rounded-md bg-surface shadow-sm ring-1 ring-line" />}
+          <span className="relative">{o.label}</span>
         </button>
       ))}
     </div>
   );
 }
 
+/** Cursor-following highlight for hero cards (CSS variables only, no re-render). */
+function spotlight(e: MouseEvent<HTMLElement>) {
+  const r = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+  e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+}
+
 export function MetricCard({ label, value, sub, icon, tone, footer }: { label: string; value: ReactNode; sub?: ReactNode; icon?: ReactNode; tone?: "danger" | "warning" | "success"; footer?: ReactNode }) {
   return (
-    <div className="panel flex flex-col justify-between p-4">
+    <motion.div
+      onMouseMove={spotlight}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      transition={ENTER}
+      className={cx("panel spotlight group relative flex flex-col justify-between overflow-hidden p-4 hover:shadow-pop", tone === "danger" ? "accent-danger" : tone === "warning" ? "accent-warning" : tone === "success" ? "accent-primary" : "accent-info")}
+    >
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs font-medium text-muted">{label}</span>
         {icon && <span className={cx("text-faint", tone === "danger" && "text-danger", tone === "warning" && "text-warning", tone === "success" && "text-primary")}>{icon}</span>}
       </div>
-      <div className="mt-2 text-[24px] font-semibold leading-tight tracking-[-0.02em] text-fg">{value}</div>
+      <div className="mt-2 text-[24px] font-semibold leading-tight tracking-[-0.02em] text-fg">{typeof value === "string" || typeof value === "number" ? <AnimatedNumber value={value} /> : value}</div>
       {sub && <div className="mt-1 text-xs text-muted">{sub}</div>}
       {footer && <div className="mt-3 border-t border-line pt-2.5">{footer}</div>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -313,7 +341,7 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-pulse2 rounded-md bg-subtle", className)} />;
+  return <div className={cx("shimmer rounded-md", className)} />;
 }
 
 export function LoadingBlock({ rows = 3 }: { rows?: number }) {

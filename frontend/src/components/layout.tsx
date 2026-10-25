@@ -5,6 +5,8 @@ import {
   ScrollText, Search, Settings, ShieldCheck, Siren, Sun, Vote, X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "motion/react";
+import { EASE, PageEnter, SPRING } from "../lib/motion";
 import { api } from "../lib/api";
 import { useApp } from "../lib/app";
 import { cx, timeAgo } from "../lib/format";
@@ -12,6 +14,7 @@ import { useAction, useHealth, useNotifications, useSystemStatus } from "../lib/
 import { DemoBadge, IconButton } from "./ui";
 import { LiveIndicator, SentinelActivity } from "./SentinelActivity";
 import { useTour } from "../lib/tour";
+import { AssistantButton } from "./Assistant";
 
 export const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
@@ -44,7 +47,7 @@ export function Logo({ compact }: { compact?: boolean }) {
 
 function Rail() {
   return (
-    <nav aria-label="Primary" className="hidden w-[64px] shrink-0 flex-col items-center border-r border-line bg-surface py-3 md:flex">
+    <nav aria-label="Primary" className="sticky top-0 hidden h-screen w-[64px] shrink-0 flex-col items-center border-r border-line bg-surface py-3 md:flex">
       <div className="mb-4">
         <Logo compact />
       </div>
@@ -55,14 +58,19 @@ function Rail() {
             to={n.to}
             end={n.end}
             className={({ isActive }) =>
-              cx("group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors", isActive ? "bg-ink text-white dark:bg-primary" : "text-muted hover:bg-subtle hover:text-fg")
+              cx("group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors duration-200", isActive ? "text-white" : "text-muted hover:bg-subtle hover:text-fg")
             }
             aria-label={n.label}
           >
-            <n.icon className="h-[18px] w-[18px]" />
-            <span className="pointer-events-none absolute left-[52px] z-50 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-pop transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-              {n.label}
-            </span>
+            {({ isActive }) => (
+              <>
+                {isActive && <motion.span layoutId="rail-active" transition={SPRING} className="absolute inset-0 rounded-xl bg-ink shadow-sm dark:bg-primary" />}
+                <n.icon className="relative h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" />
+                <span className="pointer-events-none absolute left-[52px] z-50 translate-x-[-4px] whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-pop transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
+                  {n.label}
+                </span>
+              </>
+            )}
           </NavLink>
         ))}
       </div>
@@ -79,10 +87,11 @@ function Rail() {
 }
 
 function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-ink/40 md:hidden" onClick={onClose}>
-      <nav className="h-full w-[260px] bg-surface p-4 shadow-pop animate-slide-in" onClick={(e) => e.stopPropagation()}>
+    <AnimatePresence>
+      {open && (
+    <motion.div key="mnav" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-ink/40 md:hidden" onClick={onClose}>
+      <motion.nav initial={{ x: -40 }} animate={{ x: 0 }} exit={{ x: -40 }} transition={{ duration: 0.25, ease: EASE }} className="h-full w-[260px] bg-surface p-4 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <Logo />
           <IconButton label="Close menu" onClick={onClose}>
@@ -95,8 +104,10 @@ function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
             {n.label}
           </NavLink>
         ))}
-      </nav>
-    </div>
+      </motion.nav>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -300,6 +311,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <ChainStatus />
+        <AssistantButton />
         <span className="hidden lg:inline-flex">
           <DemoBadge />
         </span>
@@ -328,7 +340,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <MobileNav open={menu} onClose={() => setMenu(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenu={() => setMenu(true)} />
-        <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-5 md:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-5 md:px-6">
+          <PageEnter id={loc.pathname}>{children}</PageEnter>
+        </main>
       </div>
     </div>
   );

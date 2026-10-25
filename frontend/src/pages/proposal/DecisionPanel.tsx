@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GrowBar } from "../../lib/motion";
 import { useNavigate } from "react-router-dom";
 import { Clock, FastForward, Gavel, Radar, ShieldCheck, ShieldX, Users, Vote } from "lucide-react";
 import { api, type ProposalDetail } from "../../lib/api";
@@ -150,7 +151,7 @@ export function DecisionPanel({ p }: { p: ProposalDetail }) {
                   <span className={cx("font-semibold", s.band === "high" ? "text-danger" : s.band === "elevated" ? "text-warning" : "text-primary")}>{pct(s.posterior, 1)}</span>
                 </div>
                 <div className="mt-1 h-1.5 rounded-full bg-subtle">
-                  <div className={cx("h-full rounded-full", s.band === "high" ? "bg-danger" : s.band === "elevated" ? "bg-warning" : "bg-primary")} style={{ width: `${Math.max(2, s.posterior * 100)}%` }} />
+                  <GrowBar pct={Math.max(2, s.posterior * 100)} className={cx("h-full rounded-full", s.band === "high" ? "bg-danger" : s.band === "elevated" ? "bg-warning" : "bg-primary")} />
                 </div>
               </li>
             ))}

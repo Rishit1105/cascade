@@ -5,6 +5,7 @@ config, the app deploys and seeds it, and every adversarial case from the brief 
 Tests run in file order and share state, like a demo session.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -177,6 +178,45 @@ def test_treasury_surface_matches_the_existing_projection(client):
     assert ok(client.get("/api/proposals/GOV-044/treasury/surface", params={"release": "milestones"}))["schedule_issues"]
     assert client.get(f"{base}/surface", params={"overruns": "0,250"}).status_code == 422
     assert client.get(f"{base}/surface", params={"overruns": "x"}).status_code == 422
+
+
+def chat(client, question, page="/", history=()):
+    """Posts one question and returns (event names, answer text, done payload) from the SSE stream."""
+    messages = [*history, {"role": "user", "content": question}]
+    r = client.post("/api/assistant/chat", json={"messages": messages, "context": {"page": page}})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream"), r.text
+    events = []
+    for block in r.text.strip().split("\n\n"):
+        name, data = (line.split(": ", 1)[1] for line in block.split("\n"))
+        events.append((name, json.loads(data)))
+    names = [n for n, _ in events]
+    return names, "".join(d["text"] for n, d in events if n == "delta"), events[-1][1]
+
+
+def test_assistant_answers_from_live_data(client):
+    status = ok(client.get("/api/assistant/status"))
+    assert status["mode"] == "offline" and status["suggestions"]
+
+    names, text, done = chat(client, "What happens to the treasury if GOV-042 overruns by 10%?")
+    assert names[0] == "meta" and names[-1] == "done" and "error" not in names
+    t = ok(client.get("/api/proposals/GOV-042/treasury", params={"overrun_pct": 10}))
+    assert "**550,000 mUSDC**" in text and "2,500,000 mUSDC" in text  # same model as the Financial page
+    assert f"{t['runway_before_months']} → {t['runway_after_months']} months" in text
+    assert done["sources"] == ["get_treasury_impact"] and {"label": "Open the financial impact page", "to": "/financial?p=GOV-042"} in done["links"]
+
+    _, ranking, _ = chat(client, "Which proposal is riskiest?")
+    combined = {p["id"]: p for p in ok(client.get("/api/proposals"))["items"]}
+    assert all(pid in ranking for pid in combined)
+
+    # A follow-up resolves "it" to the proposal from the conversation, not the page.
+    history = [{"role": "user", "content": "Summarise GOV-044"}, {"role": "assistant", "content": "GOV-044 is a draft."}]
+    _, findings, done = chat(client, "what is missing from it?", history=history)
+    assert "GOV-044" in findings and "MI-R005" in findings and done["sources"] == ["get_findings"]
+
+    _, unknown, _ = chat(client, "Tell me about GOV-999")
+    assert "GOV-999 does not exist" in unknown and all(pid in unknown for pid in combined) and "restarting" not in unknown
+    assert client.post("/api/assistant/chat", json={"messages": []}).status_code == 422
+    assert client.post("/api/assistant/chat", json={"messages": [{"role": "system", "content": "x"}]}).status_code == 422
 
 
 # ------------------------------------------------------------------ adversarial execution

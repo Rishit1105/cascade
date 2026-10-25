@@ -263,3 +263,63 @@ def test_live_bus_delivers_across_threads_and_keeps_history_per_kind():
     assert len(bus.recent(kind="ledger")) == 3
     assert [m["id"] for m in bus.recent(proposal_id="GOV-2")] == [4, 5, 6]
     assert bus.subscribers == 0
+
+
+# ------------------------------------------------------------------ assistant
+@pytest.mark.parametrize(
+    "question,section",
+    [
+        ("how does the review window work", "Sentinel and review window"),
+        ("what is the manifest builder", "Manifest and EIP-712 digest"),
+        ("how do I run the prototype", "Running the prototype"),
+        ("how is runway calculated", "Financial impact and treasury model"),
+        ("how do i use the 3d explorer", "3D treasury explorer"),
+        ("how does proposer Q&A work", "Proposer Q&A"),
+    ],
+)
+def test_assistant_knowledge_search_finds_the_right_section(question, section):
+    from app.assistant import kb
+
+    assert kb.search(question)[0][1].title == section
+    assert kb.search("zzzz qqqq") == []
+
+
+def test_assistant_knowledge_links_point_at_real_pages():
+    from app.assistant import kb
+
+    pages = {"/", "/proposals", "/relationships", "/versions", "/financial", "/voting", "/guardian", "/audit", "/escalation", "/reports", "/settings"}
+    for s in kb.sections():
+        path = s.link.split("?")[0]
+        assert path in pages or path.startswith("/proposals/GOV-"), (s.title, s.link)
+
+
+def test_assistant_tool_inputs_are_validated():
+    from app.assistant.tools import validate
+
+    assert validate("get_treasury_impact", {"proposal_id": "GOV-042", "overrun_pct": 30, "release": "milestones"}) is None
+    assert validate("get_treasury_impact", {"overrun_pct": 30}) == "missing proposal_id"
+    assert validate("get_treasury_impact", {"proposal_id": "GOV-042", "overrun_pct": "30"}) == "overrun_pct must be an integer"
+    assert validate("get_treasury_impact", {"proposal_id": "GOV-042", "overrun_pct": True}) == "overrun_pct must be an integer"
+    assert validate("get_treasury_impact", {"proposal_id": "GOV-042", "release": "monthly"}).startswith("release must be one of")
+    assert validate("get_proposal", {"proposal_id": "GOV-042; DROP TABLE"}) == "proposal_id must look like GOV-042"
+    assert validate("get_proposal", {"proposal_id": "GOV-042", "extra": 1}) == "unexpected field extra"
+    assert validate("get_proposal", ["GOV-042"]) == "input must be an object"
+    assert validate("execute_proposal", {}) == "unknown tool execute_proposal"
+
+
+def test_assistant_offline_answers_terms_rules_and_unknowns():
+    from app.assistant import offline
+
+    def ask(text):  # these routes never touch the database
+        return offline.answer(None, [{"role": "user", "content": text}], {"page": "/"})
+
+    mismatch = ask("What does ManifestMismatch mean?")
+    assert mismatch["text"].startswith("### ManifestMismatch") and "digest" in mismatch["text"] and mismatch["links"]
+    rule = ask("what is MI-R005?")
+    assert "Conflict-of-interest disclosure missing" in rule["text"] and "not evidence of wrongdoing" in rule["text"]
+    assert "Manifest digest mismatch" in ask("explain DG-R000")["text"]  # payload titles come from the rule engine
+    assert ask("How do I demo DAOGuard in 5 minutes?")["sources"] == ["guide: How to demo DAOGuard in five minutes"]
+    assert ask("hello")["sources"] == ["assistant"]
+    unknown = ask("What's the weather in Paris?")
+    assert unknown["sources"] == [] and "ANTHROPIC_API_KEY" in unknown["text"]
+    assert all(len(x["suggestions"]) >= 2 for x in (mismatch, rule, unknown))

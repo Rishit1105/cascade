@@ -63,6 +63,7 @@ function Participation({ pid }: { pid?: string }) {
   if (!sel) return <EmptyState icon={<Info className="h-5 w-5" />} title="No on-chain vote for this proposal yet" body="Open a vote from the proposal's decision panel." />;
   const total = donut.reduce((a, b) => a + b.value, 0);
   return (
+    <div className="flex flex-col gap-4">
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-4">
         <div className="grid gap-4 lg:grid-cols-3">
@@ -105,7 +106,7 @@ function Participation({ pid }: { pid?: string }) {
           </Panel>
         </div>
 
-        <Panel title="Voting trends" subtitle="Cumulative ATLAS by option (lines) and each vote's weight (bars), by block">
+        <Panel className="flex-1" title="Voting trends" subtitle="Cumulative ATLAS by option (lines) and each vote's weight (bars), by block">
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -122,7 +123,37 @@ function Participation({ pid }: { pid?: string }) {
           </div>
         </Panel>
 
-        <Panel title="Top voters" bodyClassName="px-0">
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <Panel title="Voter risk analysis" subtitle="Heuristic signals for review. Neutral language: patterns are not findings of fact.">
+          <ul className="space-y-2">
+            {sel.risk_signals.map((r: any, i: number) => (
+              <li key={i} className={cx("rounded-lg border p-2.5", r.level === "review" ? "border-warning/30 bg-warning/5" : r.level === "heuristic" ? "border-line" : "border-primary/25 bg-primary/5")}>
+                <p className="flex items-center gap-1.5 text-xs font-semibold">
+                  {r.level === "review" ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : r.level === "heuristic" ? <ShieldAlert className="h-3.5 w-3.5 text-muted" /> : <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
+                  {r.title}
+                </p>
+                <p className="mt-1 text-2xs text-muted">{r.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+        <Panel className="flex-1" title="All governor votes">
+          <ul className="space-y-2">
+            {v.data.proposals.map((p: any) => (
+              <li key={`${p.proposal_id}-${p.version}`} className="rounded-lg border border-line p-2.5 text-xs">
+                <div className="flex items-center justify-between"><span className="font-semibold">{p.proposal_id} v{p.version}</span><Badge tone={p.state === "Defeated" ? "danger" : p.state === "Active" ? "warning" : "success"}>{govStateLabel(p.state)}</Badge></div>
+                <p className="mt-0.5 truncate text-muted">{p.title}</p>
+                <p className="mt-1 text-2xs text-muted">turnout {p.participation_pct}% · for {formatUnits(p.for, 18, 0)} · against {formatUnits(p.against, 18, 0)}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-2xs text-muted">{v.data.data_label}</p>
+        </Panel>
+      </div>
+    </div>
+    <Panel title="Top voters" bodyClassName="px-0">
           <div className="overflow-x-auto">
             <table className="table-base">
               <thead><tr><th>#</th><th>Voter</th><th>Support</th><th className="text-right">Votes cast</th><th className="text-right">Power %</th><th>Relationship tags</th><th>Transaction</th></tr></thead>
@@ -142,35 +173,6 @@ function Participation({ pid }: { pid?: string }) {
             </table>
           </div>
         </Panel>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <Panel title="Voter risk analysis" subtitle="Heuristic signals for review. Neutral language: patterns are not findings of fact.">
-          <ul className="space-y-2">
-            {sel.risk_signals.map((r: any, i: number) => (
-              <li key={i} className={cx("rounded-lg border p-2.5", r.level === "review" ? "border-warning/30 bg-warning/5" : r.level === "heuristic" ? "border-line" : "border-primary/25 bg-primary/5")}>
-                <p className="flex items-center gap-1.5 text-xs font-semibold">
-                  {r.level === "review" ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : r.level === "heuristic" ? <ShieldAlert className="h-3.5 w-3.5 text-muted" /> : <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}
-                  {r.title}
-                </p>
-                <p className="mt-1 text-2xs text-muted">{r.detail}</p>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-        <Panel title="All governor votes">
-          <ul className="space-y-2">
-            {v.data.proposals.map((p: any) => (
-              <li key={`${p.proposal_id}-${p.version}`} className="rounded-lg border border-line p-2.5 text-xs">
-                <div className="flex items-center justify-between"><span className="font-semibold">{p.proposal_id} v{p.version}</span><Badge tone={p.state === "Defeated" ? "danger" : p.state === "Active" ? "warning" : "success"}>{govStateLabel(p.state)}</Badge></div>
-                <p className="mt-0.5 truncate text-muted">{p.title}</p>
-                <p className="mt-1 text-2xs text-muted">turnout {p.participation_pct}% · for {formatUnits(p.for, 18, 0)} · against {formatUnits(p.against, 18, 0)}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-2xs text-muted">{v.data.data_label}</p>
-        </Panel>
-      </div>
     </div>
   );
 }

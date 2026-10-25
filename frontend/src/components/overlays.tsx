@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { EASE, SPRING } from "../lib/motion";
 import { useApp } from "../lib/app";
 import { cx } from "../lib/format";
 import { Button, IconButton } from "./ui";
@@ -19,13 +21,18 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
   useEffect(() => {
     if (open) ref.current?.querySelector<HTMLElement>("input,textarea,select,button")?.focus();
   }, [open]);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-[1px] animate-fade-in sm:items-center sm:p-4" onMouseDown={onClose}>
-      <div
+    <AnimatePresence>
+      {open && (
+    <motion.div key="modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={onClose}>
+      <motion.div
         ref={ref}
         role="dialog"
         aria-modal="true"
+        initial={{ opacity: 0, y: 18, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        transition={{ duration: 0.24, ease: EASE }}
         className={cx("panel max-h-[92vh] w-full overflow-hidden shadow-pop sm:rounded-xl", width)}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -40,20 +47,27 @@ export function Modal({ open, onClose, title, subtitle, children, footer, width 
         </div>
         <div className="max-h-[66vh] overflow-y-auto px-5 py-4 scroll-thin">{children}</div>
         {footer && <div className="flex items-center justify-end gap-2 border-t border-line bg-subtle/50 px-5 py-3">{footer}</div>}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
 export function Drawer({ open, onClose, title, subtitle, children, actions, width = "sm:w-[460px]" }: { open: boolean; onClose: () => void; title: ReactNode; subtitle?: ReactNode; children: ReactNode; actions?: ReactNode; width?: string }) {
   useEscape(onClose, open);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-ink/25 animate-fade-in" onMouseDown={onClose}>
-      <aside
+    <AnimatePresence>
+      {open && (
+    <motion.div key="drawer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-40 flex justify-end bg-ink/25" onMouseDown={onClose}>
+      <motion.aside
         role="dialog"
         aria-modal="true"
-        className={cx("mt-auto flex max-h-[88vh] w-full flex-col rounded-t-2xl border-l border-line bg-surface shadow-pop animate-slide-in sm:mt-0 sm:h-full sm:max-h-none sm:rounded-none", width)}
+        initial={{ x: 40, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 40, opacity: 0 }}
+        transition={{ duration: 0.28, ease: EASE }}
+        className={cx("mt-auto flex max-h-[88vh] w-full flex-col rounded-t-2xl border-l border-line bg-surface shadow-pop sm:mt-0 sm:h-full sm:max-h-none sm:rounded-none", width)}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
@@ -67,8 +81,10 @@ export function Drawer({ open, onClose, title, subtitle, children, actions, widt
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 scroll-thin">{children}</div>
         {actions && <div className="flex flex-wrap gap-2 border-t border-line px-5 py-3">{actions}</div>}
-      </aside>
-    </div>
+      </motion.aside>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -146,23 +162,33 @@ export function ConfirmDialog({
 export function Toasts() {
   const { toasts, dismissToast } = useApp();
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-24 right-5 z-[60] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite">
+      <AnimatePresence initial={false}>
       {toasts.map((t) => {
         const icon =
           t.tone === "success" ? <CheckCircle2 className="h-4 w-4 text-primary" /> : t.tone === "error" ? <XCircle className="h-4 w-4 text-danger" /> : t.tone === "warning" ? <AlertTriangle className="h-4 w-4 text-warning" /> : <Info className="h-4 w-4 text-info" />;
         return (
-          <div key={t.id} className="pointer-events-auto panel flex items-start gap-2.5 p-3 shadow-pop animate-slide-in">
+          <motion.div
+            key={t.id}
+            layout
+            initial={{ opacity: 0, x: 32, scale: 0.96 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 32, scale: 0.96, transition: { duration: 0.16 } }}
+            transition={SPRING}
+            className={cx("pointer-events-auto panel relative flex items-start gap-2.5 overflow-hidden p-3 shadow-pop", t.tone === "success" ? "accent-primary" : t.tone === "error" ? "accent-danger" : t.tone === "warning" ? "accent-warning" : "accent-info")}
+          >
             <span className="mt-0.5">{icon}</span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold capitalize-first text-fg">{t.title}</p>
               {t.body && <p className="mt-0.5 break-words text-xs text-muted">{t.body}</p>}
             </div>
-            <button aria-label="Dismiss" onClick={() => dismissToast(t.id)} className="text-faint hover:text-fg">
+            <button aria-label="Dismiss" onClick={() => dismissToast(t.id)} className="cursor-pointer text-faint hover:text-fg">
               <X className="h-3.5 w-3.5" />
             </button>
-          </div>
+          </motion.div>
         );
       })}
+      </AnimatePresence>
     </div>
   );
 }

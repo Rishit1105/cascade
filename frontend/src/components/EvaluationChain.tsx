@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { GrowBar } from "../lib/motion";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, FileSearch, GitBranch, Network, ShieldCheck, Sigma, Vote } from "lucide-react";
 import type { EvaluationChain as Chain } from "../lib/api";
@@ -55,7 +56,7 @@ export function EvaluationChainView({ chain, proposalId, compact }: { chain: Cha
                     </Badge>
                   </div>
                   <div className="relative mt-2 h-1.5 rounded-full bg-subtle" title={`prior ${pct(s.prior)} → posterior ${pct(s.posterior, 1)}`}>
-                    <div className={cx("absolute inset-y-0 left-0 rounded-full", band.bar)} style={{ width: `${Math.max(2, s.posterior * 100)}%` }} />
+                    <GrowBar pct={Math.max(2, s.posterior * 100)} className={cx("absolute inset-y-0 left-0 rounded-full", band.bar)} />
                     <div className="absolute -top-0.5 h-2.5 w-0.5 rounded bg-fg/60" style={{ left: `${s.prior * 100}%` }} />
                   </div>
                   <p className="mt-1.5 text-2xs text-muted">{STATUS_LABEL[s.status] ?? s.status} · prior {pct(s.prior)}</p>

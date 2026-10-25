@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { GrowBar } from "../lib/motion";
 import { useSearchParams } from "react-router-dom";
-import { AlertOctagon, BellRing, ChevronRight, FileWarning, Gavel, Megaphone, OctagonX, ShieldAlert, ShieldX, X } from "lucide-react";
+import { AlertOctagon, BellRing, ChevronRight, FileWarning, Gavel, Megaphone, OctagonX, Radar, ShieldAlert, ShieldX, X } from "lucide-react";
 import { api, type Alert } from "../lib/api";
 import { cx, dateTime, pct, timeAgo, titleCase } from "../lib/format";
 import { useAction, useAlerts, useAttempts, useEvaluation, useFindings, useGovernance, useSimulations } from "../lib/queries";
 import { Modal } from "../components/overlays";
+import { LiveIndicator, SentinelActivity } from "../components/SentinelActivity";
 import { Badge, Button, Callout, EmptyState, ErrorState, Field, LoadingBlock, Panel, ProgressBar, Segmented, SeverityBadge, StatusBadge, TxLink } from "../components/ui";
 
 const RATING = (p: number) => (p < 0.1 ? "A" : p < 0.2 ? "B" : p < 0.35 ? "C" : p < 0.5 ? "D" : p < 0.7 ? "E" : "F");
@@ -68,7 +70,7 @@ export default function Escalation() {
                 {evaluation.data?.stages.map((s) => (
                   <div key={s.key} className="flex items-center gap-2 text-2xs">
                     <span className="w-28 truncate text-white/70">{s.name}</span>
-                    <div className="h-1 flex-1 rounded-full bg-white/10"><div className={cx("h-full rounded-full", s.band === "high" ? "bg-[#F0606E]" : s.band === "elevated" ? "bg-[#E0A43A]" : "bg-[#2BB39A]")} style={{ width: `${Math.max(3, s.posterior * 100)}%` }} /></div>
+                    <div className="h-1 flex-1 rounded-full bg-white/10"><GrowBar pct={Math.max(3, s.posterior * 100)} className={cx("h-full rounded-full", s.band === "high" ? "bg-[#F0606E]" : s.band === "elevated" ? "bg-[#E0A43A]" : "bg-[#2BB39A]")} /></div>
                     <span className="w-10 text-right font-mono text-white/80">{pct(s.posterior)}</span>
                   </div>
                 ))}
@@ -88,6 +90,10 @@ export default function Escalation() {
                   </li>
                 ))}
               </ol>
+            </Panel>
+
+            <Panel className="flex-1" title="Live sentinel activity" icon={<Radar className="h-4 w-4 text-primary" />} actions={<LiveIndicator />} subtitle="Reviews of this proposal, streamed as they run.">
+              <SentinelActivity proposalId={pid} limit={2} empty="No sentinel review or simulation of this proposal in this session yet." />
             </Panel>
           </div>
 
@@ -119,7 +125,7 @@ export default function Escalation() {
               </div>
             </Panel>
 
-            <Panel title="Risk mitigation metrics" subtitle="Execution attempts against the guard for this proposal" bodyClassName="px-0">
+            <Panel className="flex-1" title="Risk mitigation metrics" subtitle="Execution attempts against the guard for this proposal" bodyClassName="px-0">
               {(attempts.data ?? []).length === 0 && <p className="px-4 text-xs text-muted">No execution attempts recorded.</p>}
               {(attempts.data ?? []).length > 0 && (
                 <div className="overflow-x-auto">
@@ -141,7 +147,7 @@ export default function Escalation() {
             </Panel>
           </div>
 
-          <Panel title="Vulnerability & threat details" subtitle={pid ? `Open findings for ${pid}` : undefined}>
+          <Panel className="h-full" title="Vulnerability & threat details" subtitle={pid ? `Open findings for ${pid}` : undefined}>
             <ul className="space-y-2">
               {(findings.data ?? []).filter((f) => f.status === "open" || f.status === "challenged").slice(0, 8).map((f) => (
                 <li key={f.id} className="rounded-lg border border-line p-2.5">

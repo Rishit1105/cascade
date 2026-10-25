@@ -9,6 +9,7 @@ import { EvaluationChainView } from "../components/EvaluationChain";
 import { GraphLegend, RelationshipGraph } from "../components/RelationshipGraph";
 import { Badge, Button, DemoBadge, EmptyState, ErrorState, LoadingBlock, MetricCard, PageHeader, Panel, ProgressBar, SeverityBadge, StatusBadge, TxLink, VerificationBadge } from "../components/ui";
 import { LiveIndicator, SentinelActivity } from "../components/SentinelActivity";
+import { LedgerTicker } from "../components/LedgerTicker";
 
 export default function Overview() {
   const ov = useOverview();
@@ -43,6 +44,8 @@ export default function Overview() {
           </>
         }
       />
+
+      <LedgerTicker />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Active proposals" value={m ? String(m.active_proposals).padStart(2, "0") : "—"} icon={<FileText className="h-4 w-4" />} sub="Drafts, votes and approvals not yet executed" />
@@ -100,8 +103,9 @@ export default function Overview() {
         )}
       </Panel>
 
-      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Panel
+          className="h-full"
           title="Governance relationship map"
           subtitle="Proposals, wallets, delegates, treasury and contracts. Edges carry their evidence source."
           actions={
@@ -109,15 +113,15 @@ export default function Overview() {
               Open explorer
             </Button>
           }
-          bodyClassName="px-0 pb-0"
+          bodyClassName="flex flex-col px-0 pb-0"
         >
-          <div className="border-t border-line">
+          <div className="relative min-h-[560px] flex-1 border-t border-line">
             {graph.isLoading && <div className="p-4"><LoadingBlock rows={6} /></div>}
             {graph.data && (
               <RelationshipGraph
                 nodes={graph.data.nodes.filter((n) => ["proposal", "wallet", "delegate", "treasury", "dao"].includes(n.type) && n.role !== "fee_payer")}
                 edges={graph.data.edges.filter((e) => !["references_evidence", "execution_attempt", "governs", "executes_contract", "embedded_in_bytecode"].includes(e.type))}
-                height={560}
+                height="100%"
                 compact
                 showLabels
                 onSelectNode={(n) => n && navigate(`/relationships?focus=${encodeURIComponent(n.id)}`)}
