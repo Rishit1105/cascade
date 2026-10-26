@@ -15,3 +15,4 @@ os.environ["DAOGUARD_DATA_DIR"] = tempfile.mkdtemp(prefix="daoguard-test-")
 os.environ["DAOGUARD_SENTINEL_POLL_SECONDS"] = "0.5"
 os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.pop("DAOGUARD_ANTHROPIC_API_KEY", None)
+os.environ["DAOGUARD_LOCAL_LLM_ENABLED"] = "false"  # deterministic answers: no Ollama in tests

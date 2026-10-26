@@ -265,3 +265,42 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Ledger constellation: pulses travel along the hash-chain thread; failures breathe. */
+@keyframes dg-chain-flow {
+  to {
+    stroke-dashoffset: -1200;
+  }
+}
+.ledger-flow {
+  stroke-dasharray: 3 150;
+  animation: dg-chain-flow 18s linear infinite;
+}
+@keyframes dg-halo {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.2;
+    transform: scale(1.7);
+  }
+}
+.ledger-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dg-halo 2.4s ease-in-out infinite;
+}
+.ledger-node:focus-visible .ledger-focus {
+  stroke: rgb(var(--primary)) !important;
+}
+
+/* Looping animations stop outright for reduced motion (a 0.01ms loop would flicker). */
+@media (prefers-reduced-motion: reduce) {
+  .ledger-flow,
+  .ledger-halo,
+  .shimmer {
+    animation: none !important;
+  }
+}

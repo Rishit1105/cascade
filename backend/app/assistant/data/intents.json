@@ -1,0 +1,215 @@
+{
+  "_about": "Training data for the DAOGuard assistant's intent model. Placeholders: {p} proposal, {a} labelled address, {pct} percentage, {rule} rule code, {term} contract error, {seq} ledger event number, {v} version. 'examples' train the model; 'tests' are held out and only used to measure it (python -m app.assistant.train).",
+  "intents": {
+    "greeting": {
+      "scope": "meta", "description": "Hello or small talk opener",
+      "examples": ["hi", "hello", "hey", "hey there", "hello there", "good morning", "good afternoon", "good evening", "hiya", "yo", "sup", "howdy", "greetings", "namaste", "hello assistant", "hey daoguard", "hi daoguard", "hello, anyone there?", "hey, how are you", "hi, how's it going", "morning", "hey bot", "heyy", "helo", "hi again", "hello hello", "hey assistant", "good day", "hi, i'm new here", "hey, quick one"],
+      "tests": ["hi there!", "good morning assistant", "hey hey", "hello friend"]
+    },
+    "thanks": {
+      "scope": "meta", "description": "Thanks or acknowledgement",
+      "examples": ["thanks", "thank you", "thx", "ty", "cheers", "great, thanks", "awesome thank you", "perfect", "that helps", "nice, thanks a lot", "appreciate it", "thanks for the help", "got it thanks", "ok cool", "brilliant", "great answer", "super helpful", "thank u", "many thanks", "that's exactly what i needed", "nice", "cool thanks", "cheers mate", "thanks, that's clear", "great stuff", "fantastic", "ok great", "understood, thanks", "makes sense, thanks"],
+      "tests": ["thanks a ton", "ok thank you", "very helpful, thanks", "awesome"]
+    },
+    "goodbye": {
+      "scope": "meta", "description": "Ending the conversation",
+      "examples": ["bye", "goodbye", "see you", "that's all", "i'm done", "later", "cya", "exit", "nothing else", "that is all for now", "see ya", "bye bye", "talk later", "catch you later", "end chat", "i'm finished", "no more questions", "that will be all", "ok bye now", "i'm good, bye", "signing off", "done for now", "thanks, bye"],
+      "tests": ["ok bye", "that's it for today", "see you later"]
+    },
+    "capabilities": {
+      "scope": "meta", "description": "What the assistant can do, how to use it, example questions",
+      "examples": ["help", "what can you do", "what can i ask", "how do you work", "what do you know", "show me examples", "what are you able to answer", "menu", "options", "commands", "how can you help me", "what should i ask you", "?", "what questions can i ask", "capabilities", "what topics do you cover", "give me some example questions", "how do i use you", "what kind of questions do you answer", "what are your features", "help me", "i need help", "what can you help with", "what are you good at", "list your skills", "where do i start", "can you help me", "what else can you do", "what do you cover"],
+      "tests": ["what can i ask you about", "examples please", "how can you help", "what do you do"]
+    },
+    "identity": {
+      "scope": "meta", "description": "Who or what the assistant is, which model, privacy",
+      "examples": ["who are you", "are you chatgpt", "what model are you", "are you an ai", "who made you", "are you claude", "what are you", "is this a real person", "which llm powers you", "are you running locally", "do you use the internet", "is my data sent anywhere", "are you open source", "how were you trained", "what model do you run on", "are you a bot", "do you send my questions to the cloud", "what engine are you using", "are you offline", "what are you running on", "is this gpt", "do you need an api key", "are you a language model", "what's powering this chat", "can you see my data", "are you online", "who built this assistant"],
+      "tests": ["are you a human", "which ai model is this", "is this running on my machine", "how were you built"]
+    },
+    "proposal_overview": {
+      "scope": "proposal", "description": "Summary or overview of one proposal",
+      "examples": ["{p}", "{p}?", "tell me about {p}", "summarise {p}", "summarize {p}", "overview of {p}", "what is {p}", "what is {p} about", "explain {p}", "{p} summary", "give me the gist of {p}", "brief me on {p}", "describe {p}", "what's going on with {p}", "info on {p}", "details of {p}", "summary", "summarise this", "summarize it", "tldr", "tl;dr of {p}", "what is this proposal", "explain this proposal to a voter", "summarise {p} for a voter", "break down {p}", "quick summary please", "what does this proposal do", "eli5 {p}", "explain it simply", "what's {p}", "overview", "what is it", "give me a rundown of {p}", "sum up {p}", "{p} in a nutshell", "what do i need to know about {p}", "what about this one", "what is this one about", "describe this proposal", "this proposal?", "tell me everything about {p}", "full picture of {p}", "what's the story with {p}", "{p} details", "about {p}", "so what is {p}", "intro to {p}", "can you explain {p}", "walk me through {p}", "what does {p} want"],
+      "tests": ["summery of {p}", "whats {p}", "explain this one", "rundown please", "tell me abt {p}", "{p} overview pls"]
+    },
+    "proposal_amount": {
+      "scope": "proposal", "description": "How much money a proposal requests",
+      "examples": ["how much", "how much is {p} asking for", "requested amount", "how much money does {p} want", "what's the ask", "cost of {p}", "amount", "how big is {p}", "how many musdc", "price tag", "how much does it cost", "how much will {p} pay out", "{p} amount", "size of the grant", "what is the total requested", "dollar amount", "how expensive is it", "how much are they requesting", "what's the requested funding", "funding amount of {p}", "how much funding", "how much money", "amount requested by {p}", "what does it cost the dao", "how many tokens", "what's the budget", "budget?", "the ask?", "how much are they asking", "requested sum", "how much is requested in {p}", "total ask", "how large is the request", "musdc requested", "what amount does {p} request", "how much money is {p}"],
+      "tests": ["how much do they want", "requested funds?", "how much $$", "cost?", "how much is it"]
+    },
+    "proposal_recipient": {
+      "scope": "proposal", "description": "Who receives the funds of a proposal",
+      "examples": ["who gets the money", "recipient", "who receives the funds", "who is paid", "who is the recipient of {p}", "where does the money go", "who benefits", "beneficiary", "payee", "who gets paid in {p}", "destination wallet", "which wallet receives it", "to whom", "recipient address", "who receives {p}'s payout", "who will get the funds", "where do the funds go", "receiving address", "who is the money for", "paid to whom", "who's getting paid", "where's the money going", "receiver", "who gets the funds", "who is paid by {p}", "which address gets the money", "recipient wallet", "who collects the funds", "beneficiary of {p}"],
+      "tests": ["who gets paid", "whos the recipient", "where does it go", "who receives it", "recipient of {p}?"]
+    },
+    "proposal_proposer": {
+      "scope": "proposal", "description": "Who proposed or authored a proposal",
+      "examples": ["who proposed {p}", "proposer", "who is behind {p}", "author", "who submitted it", "who wrote this proposal", "who created {p}", "who is asking", "sponsor", "who made the proposal", "who's the proposer", "proposer of {p}", "which team proposed it", "who put this forward", "author of {p}", "who's the author", "who is the proposer of {p}", "who submitted {p}", "who sponsored it", "who drafted it", "which address proposed it", "proposed by whom", "creator"],
+      "tests": ["who wrote it", "who is the author", "proposer?", "who's behind this"]
+    },
+    "proposal_status": {
+      "scope": "proposal", "description": "Current status or stage of a proposal (draft, voting, approved, executed, halted)",
+      "examples": ["status", "status of {p}", "where is {p}", "is {p} approved", "has {p} passed", "is it live", "what stage is {p} at", "is it executed", "did it pass", "is {p} still in voting", "current state", "is {p} a draft", "has it been approved yet", "is it done", "what's the status", "is {p} halted", "has {p} been executed", "stage", "where does it stand", "is it approved", "progress of {p}", "is it finished", "where is it at", "status update", "is it passed", "has it executed", "is it still open", "is voting over", "is {p} live", "what's happening with it now", "approved?", "executed?", "is it halted", "what state is it in", "what happens next with {p}", "what's next for {p}", "next step for this proposal", "what is the next step", "when can {p} execute", "can it execute yet"],
+      "tests": ["status?", "did {p} pass", "where are we with this", "is it approved yet", "state of {p}", "what's next for this one"]
+    },
+    "proposal_purpose": {
+      "scope": "proposal", "description": "What a proposal is for: purpose, benefits, stated risks and assumptions",
+      "examples": ["what is it for", "purpose of {p}", "what will {p} fund", "benefits of {p}", "what problem does it solve", "goal of {p}", "why do they need the money", "what are the benefits", "what are the stated risks", "assumptions of {p}", "what does the money pay for", "why does {p} exist", "what's the point", "objective", "expected benefits", "what risks did they list", "what are the dependencies", "use of funds", "what's the goal", "why this proposal", "what will they build", "what's the money for", "reason for {p}", "what is {p} trying to achieve", "what do they plan to do", "intended outcome", "rationale"],
+      "tests": ["whats the purpose", "what's it for", "benefits?", "what will the money be used for"]
+    },
+    "proposal_payouts": {
+      "scope": "proposal", "description": "Milestones, payout schedule, tranches and budget breakdown",
+      "examples": ["milestones", "payout schedule", "tranches", "when are payments made", "budget breakdown", "how is the money split", "deliverables", "milestones of {p}", "when do they get paid", "release schedule", "itemised budget", "what are the deliverables", "payment schedule of {p}", "how is {p} paid out", "is it paid in one go", "budget items", "cost breakdown", "milestone payments", "payouts", "payout", "payments", "when do payments happen", "tranche schedule", "milestones?", "what are the payment milestones", "how are the funds released", "payment plan", "is it paid in stages", "staged payments", "how much per milestone"],
+      "tests": ["payouts?", "schedule of payments", "what are the milestones", "breakdown of the budget"]
+    },
+    "risk_evaluation": {
+      "scope": "proposal", "description": "Risk level and the evaluation chain of a proposal",
+      "examples": ["risk?", "risk", "how risky is {p}", "risk score", "is {p} risky", "evaluation chain of {p}", "risk level", "how dangerous is it", "should i worry about {p}", "combined estimate", "what's the risk", "risk breakdown", "assurance rating", "how bad is it", "danger level", "likelihood of problems", "explain the evaluation chain for {p}", "posterior", "risk profile of {p}", "how risky", "is it dangerous", "risk assessment", "what's the risk rating", "how concerned should i be", "evaluation", "score of {p}", "risky", "how safe is {p}", "is it safe to approve", "threat level", "risk %", "risk percentage", "is this a scam", "is {p} suspicious", "is it fraud", "trust score", "how trustworthy is {p}", "what's the danger", "risk estimate"],
+      "tests": ["how risky is this", "risky?", "risk of {p}", "should i be worried", "risk rating pls"]
+    },
+    "findings": {
+      "scope": "proposal", "description": "Open findings, missing information, contradictions and issues; what voters should ask",
+      "examples": ["what is missing", "what's missing from {p}", "findings", "issues", "problems with {p}", "red flags", "gaps", "concerns", "what's wrong with {p}", "open findings", "information gaps", "what should voters ask", "what questions should i ask", "weak points", "contradictions", "any issues", "flags on {p}", "what's incomplete", "missing info", "any red flags in {p}", "what problems were found", "list the findings", "inconsistencies", "what's wrong with it", "what is wrong", "issues found", "what did you find", "problems?", "concerns about {p}", "is anything missing", "missing documents", "what information is missing", "anything suspicious in {p}", "what should i question", "questions to ask the proposer", "flags"],
+      "tests": ["anything missing", "issues with this?", "what are the gaps in {p}", "red flags?", "what's wrong"]
+    },
+    "execution_safety": {
+      "scope": "proposal", "description": "Whether a proposal's payload is safe to execute: guard status, simulations, attempts",
+      "examples": ["is it safe", "is {p} safe to execute", "can {p} execute", "guard status", "will the guard let it through", "is the upgrade safe", "can it run", "execution status", "is the payload safe", "did the simulation pass", "simulation result for {p}", "is there a backdoor", "can it drain the treasury", "is the code safe", "what did the simulation find", "execution check", "can someone tamper with it", "is it executable", "what happens if someone changes the payload", "is the bytecode safe", "is the implementation malicious", "safe to run?", "is {p} safe", "guard", "simulation", "is the payload legit", "can it be executed safely", "will it execute", "execution?", "can the guard be bypassed", "what if the payload is tampered", "malicious code?", "is the new implementation safe", "is the contract change safe", "sim results", "did it pass simulation", "is it blocked"],
+      "tests": ["safe?", "is this upgrade safe", "can {p} be executed", "backdoor?", "is it safe to execute"]
+    },
+    "treasury_impact": {
+      "scope": "proposal", "description": "Impact of a proposal on treasury and runway, including overrun scenarios",
+      "examples": ["runway impact of {p}", "what if {p} overruns by {pct}", "treasury impact of {p}", "can we afford {p}", "{pct} overrun", "what happens to runway", "impact on the treasury", "how long will the money last after {p}", "what if it costs {pct} more", "runway with milestones", "affordability", "does {p} drain the treasury", "balance after {p}", "projected balance", "cost overrun scenario", "what if it goes over budget", "runway if {p} passes", "impact of {p} on runway with a {pct} overrun", "financial impact", "can the dao afford it", "what happens if it overruns by {pct} with milestone tranches", "runway after {p}", "how does {p} affect runway", "treasury hit", "how much runway do we lose", "what if costs run {pct} over", "overrun", "budget overrun", "can we afford it with a {pct} overrun", "effect on treasury", "will we run out of money", "months of runway after {p}"],
+      "tests": ["runway if it overruns {pct}", "can we afford this", "impact on runway?", "what if {p} costs {pct} more"]
+    },
+    "conflicts": {
+      "scope": "proposal", "description": "Conflicts of interest and relationships between proposer, recipient and voters",
+      "examples": ["conflicts", "conflict of interest", "who is connected to the recipient", "is the proposer related to the recipient", "insider", "self dealing", "any relationships", "conflicts on {p}", "undisclosed transfer", "who funded the recipient", "is {p} self-dealing", "relationship between proposer and recipient", "is it a sybil", "links between wallets", "are they the same person", "conflict?", "coi", "are the proposer and recipient linked", "hidden relationships", "connected wallets", "who is linked to {p}", "are they connected", "any conflicts", "conflict", "coi?", "related parties", "is the recipient linked to the proposer", "money between proposer and recipient", "did the proposer pay the recipient", "who is behind the recipient", "insider trading", "relationship graph of {p}"],
+      "tests": ["conflicts of interest?", "are they related", "insider deal?", "any links between them"]
+    },
+    "versions_changes": {
+      "scope": "proposal", "description": "Version history and what changed between versions",
+      "examples": ["what changed", "what changed in {v}", "versions of {p}", "version history", "diff", "compare versions", "how many versions", "what's new in the latest version", "changes since v1", "was the payload changed", "edit history", "revisions of {p}", "did they change the implementation", "what was modified", "version diff of {p}", "changes", "latest changes", "was it modified", "was the proposal edited", "what was updated", "how many versions does {p} have", "version 2 changes", "what's different", "diff between versions", "what did they change", "was the code swapped", "change log"],
+      "tests": ["what changed in {p}", "versions?", "what's different in {v}", "was it edited"]
+    },
+    "evidence_docs": {
+      "scope": "proposal", "description": "Evidence documents attached to a proposal and their verification",
+      "examples": ["documents", "evidence", "sources", "what evidence is attached", "attachments", "files", "evidence for {p}", "what documents back {p}", "is the evidence verified", "proofs", "supporting docs", "citations", "what files were provided", "docs", "evidence list", "which documents are attached", "evidence?", "documents?", "which files", "is there proof", "what proof is there", "evidence attached to {p}", "supporting evidence", "uploaded documents", "are the documents verified", "pdfs"],
+      "tests": ["docs?", "what evidence does {p} have", "attached files", "show the documents"]
+    },
+    "qa_status": {
+      "scope": "proposal", "description": "Reviewer questions to the proposer and their answers (Q&A)",
+      "examples": ["q&a", "qa", "questions to the proposer", "has the proposer answered", "open questions", "answers", "qa status of {p}", "did they reply", "pending questions", "what did the proposer say", "questions asked", "any answers yet", "proposer replies", "unanswered questions", "what was asked", "q & a", "q&a status", "questions and answers", "did the proposer respond", "answers from the proposer", "open q&a", "pending answers", "any replies from {p}'s proposer", "qa?"],
+      "tests": ["did the proposer answer", "q and a", "open questions on {p}", "replies?"]
+    },
+    "vote_result": {
+      "scope": "proposal", "description": "Votes on a proposal: result, turnout, quorum, deadline, who voted",
+      "examples": ["votes", "votes on {p}", "who voted", "turnout", "turnout?", "quorum", "did {p} reach quorum", "vote count", "for vs against", "when does voting end", "voting deadline", "how did people vote", "result of the vote", "vote tally", "who voted against", "how many voters", "biggest voters on {p}", "participation", "vote result", "who voted for {p}", "how many votes", "is the vote close", "margin", "voting results", "vote?", "how's the vote going", "voting result", "who's winning", "is it passing", "quorum?", "for and against", "how many for", "how many against", "the votes", "who are the top voters", "vote breakdown", "when is the deadline"],
+      "tests": ["who voted on this", "votes?", "turnout on {p}", "did it reach quorum", "how did the vote go"]
+    },
+    "vote_advice": {
+      "scope": "proposal", "description": "Asking for a voting recommendation",
+      "examples": ["should i vote yes", "should i vote for {p}", "how should i vote", "yes or no", "recommend a vote", "would you approve {p}", "is it a good proposal", "should we fund it", "should i support {p}", "vote recommendation", "would you vote for it", "should i vote no", "is {p} worth funding", "approve or reject", "should the dao approve this", "vote no?", "yes?", "should i", "should i vote", "is it worth it", "good idea to approve?", "do you recommend it", "your recommendation", "should i back {p}", "is {p} a yes"],
+      "tests": ["should i approve it", "vote yes?", "would you support {p}", "should we pass this"]
+    },
+    "voting_power": {
+      "scope": "global", "description": "Voting-power concentration across the DAO: whales, Gini, Nakamoto coefficient, top holders",
+      "examples": ["whales", "gini", "nakamoto coefficient", "voting power concentration", "who has the most votes", "largest holders", "is voting centralized", "top delegates", "hhi", "decentralization", "concentration", "who controls the dao", "biggest delegates", "what is the gini coefficient", "what is the nakamoto coefficient", "how concentrated is voting power", "power distribution", "top holders", "is the dao decentralized", "who are the whales", "how centralised is voting", "how decentralised is the dao", "voting concentration", "power concentration", "who are the biggest holders", "nakamoto", "gini?", "who has power", "delegate power", "largest delegates", "is power concentrated", "how many delegates are there", "how many token holders", "who are the delegates", "list the delegates"],
+      "tests": ["whales?", "gini coefficient", "how decentralised is it", "who holds the most power"]
+    },
+    "actor_lookup": {
+      "scope": "actor", "description": "A labelled address: delegate, proposer, recipient or contract",
+      "examples": ["who is {a}", "tell me about {a}", "{a}", "what did {a} vote", "how much power does {a} have", "is {a} a delegate", "wallet {a}", "what is {a}'s role", "lookup {a}", "{a} balance", "{a}?", "info about {a}", "what has {a} done", "is {a} connected to anyone", "what is {a}", "who is the delegate {a}", "show {a}", "find {a}", "what did {a} do", "{a} details", "address of {a}", "is {a} a whale", "{a} votes"],
+      "tests": ["who's {a}", "{a} voting power", "look up {a}", "details on {a}"]
+    },
+    "ranking": {
+      "scope": "global", "description": "Rank proposals: riskiest, safest, biggest, which needs attention first",
+      "examples": ["which proposal is riskiest", "riskiest", "worst proposal", "safest proposal", "rank the proposals", "which one should i look at first", "biggest proposal", "largest request", "most dangerous proposal", "which proposals need attention", "top risk", "priority", "order by risk", "which is the most expensive", "riskiest proposal right now", "which proposal is the worst", "which is safest", "most risky", "highest risk", "rank by amount", "which proposal asks for the most", "which needs review first", "what to look at first", "which proposal should i check", "ranking", "rank them", "worst one", "best one", "the riskiest", "highest risk proposal", "which proposal has the most findings", "most problematic proposal", "which is the biggest ask"],
+      "tests": ["riskiest one?", "which is most dangerous", "biggest ask", "what should i review first"]
+    },
+    "compare": {
+      "scope": "multi", "description": "Compare two or more proposals side by side",
+      "examples": ["compare {p} and {p}", "{p} vs {p}", "difference between {p} and {p}", "which is riskier {p} or {p}", "compare them", "compare all", "side by side", "{p} versus {p}", "how does {p} compare to {p}", "compare {p} with {p}", "compare all proposals", "contrast {p} and {p}", "compare", "compare proposals", "which is better {p} or {p}", "{p} or {p}?", "differences between them", "compare risk of {p} and {p}", "compare the two"],
+      "tests": ["{p} or {p}", "compare these two", "{p} compared to {p}"]
+    },
+    "list_proposals": {
+      "scope": "global", "description": "List all proposals",
+      "examples": ["list proposals", "what proposals are there", "all proposals", "show proposals", "proposals", "how many proposals", "what's on the agenda", "what's up for vote", "active proposals", "drafts", "show me everything", "list them", "which proposals exist", "current proposals", "open proposals", "proposals?", "which proposals", "show all", "list everything", "what's being voted on", "how many proposals are there", "the proposals list", "which proposals are approved", "which proposals are in voting", "show the drafts", "executed proposals"],
+      "tests": ["list all proposals", "what proposals do we have", "show me the proposals"]
+    },
+    "treasury_overview": {
+      "scope": "global", "description": "The DAO treasury: balance, burn, pending payouts, runway in general",
+      "examples": ["treasury", "treasury balance", "how much money does the dao have", "balance", "runway", "money", "funds", "how much is in the treasury", "burn rate", "monthly burn", "pending payouts", "financial health", "what's our runway", "treasury status", "how rich is the dao", "how much cash", "what's left in the treasury", "inflows", "fee revenue", "how much money is there", "cash position", "treasury overview", "available funds", "money left", "what's the balance", "burn?", "how much do we spend per month", "monthly spend", "treasury health", "how much has been paid out", "total payouts so far", "what's committed", "pending approvals"],
+      "tests": ["treasury?", "how much money do we have", "dao balance", "runway?"]
+    },
+    "alerts": {
+      "scope": "global", "description": "Open alerts and what needs a human decision",
+      "examples": ["alerts", "any alerts", "open alerts", "what needs attention", "what should i do", "incidents", "what's urgent", "escalations", "critical issues", "warnings", "anything wrong", "what's on fire", "to do", "inbox", "pending alerts", "what needs my decision", "urgent items", "security alerts", "what needs my attention", "what's urgent today", "alerts list", "open issues", "critical alerts", "anything critical", "what should i handle", "escalated items", "pending decisions"],
+      "tests": ["alerts?", "anything urgent", "what needs action", "open incidents"]
+    },
+    "recent_activity": {
+      "scope": "global", "description": "Recent activity in the audit ledger",
+      "examples": ["what happened recently", "latest events", "recent activity", "what's new", "news", "what happened today", "log", "latest", "activity feed", "what changed today", "updates", "recent ledger events", "anything new", "last events", "what just happened", "latest activity", "latest news", "what's happening", "recent", "any updates", "most recent events", "what happened last", "activity", "recent changes", "what's been going on", "how many events are in the ledger", "what was the last event", "show recent events"],
+      "tests": ["recent events?", "whats new", "what happened lately"]
+    },
+    "proposal_timeline": {
+      "scope": "proposal", "description": "History and audit trail of one proposal",
+      "examples": ["history of {p}", "what happened to {p}", "timeline of {p}", "{p} events", "events for {p}", "audit trail of {p}", "what has {p} been through", "lifecycle of {p}", "{p} history", "when was {p} created", "what has happened with this proposal", "timeline", "history", "history of this", "what happened with {p}", "past events of {p}", "when did {p} start", "audit history of {p}", "chronology of {p}"],
+      "tests": ["timeline?", "history of this proposal", "{p} audit trail"]
+    },
+    "ledger_integrity": {
+      "scope": "global", "description": "Whether the audit ledger is intact; verifying the hash chain",
+      "examples": ["is the ledger ok", "verify the ledger", "is the audit trail intact", "has anything been tampered", "ledger integrity", "check the hash chain", "was the log edited", "is the history trustworthy", "verify", "integrity check", "is the ledger tamper proof", "can the ledger be edited", "check integrity", "was anything altered", "is the ledger intact", "ledger?", "verify integrity", "can i trust the log", "is the audit log tamper-evident", "any broken links", "hash chain ok?", "is anything edited after the fact", "verification status"],
+      "tests": ["ledger ok?", "has the log been tampered with", "verify the audit trail"]
+    },
+    "ledger_connection": {
+      "scope": "ledger", "description": "How two audit-ledger events are connected",
+      "examples": ["how are events {seq} and {seq} connected", "connection between {seq} and {seq}", "link between event {seq} and {seq}", "relate {seq} to {seq}", "how are audit events {seq} and {seq} related", "what connects {seq} and {seq}", "how is event {seq} related to {seq}", "explain the string between {seq} and {seq}", "connect {seq} with {seq}", "{seq} vs {seq}", "relationship between {seq} and {seq}", "what links {seq} to {seq}"],
+      "tests": ["{seq} and {seq} connection", "how do {seq} and {seq} relate"]
+    },
+    "page_help": {
+      "scope": "page", "description": "Explain the page the user is looking at",
+      "examples": ["explain this page", "what is this page", "what am i looking at", "how do i use this page", "what does this screen show", "help with this page", "what can i do here", "where am i", "explain this screen", "what's on this page", "how does this page work", "walk me through this page", "what is this screen for", "what is shown here", "what can this page do", "page help", "how do i read this page", "explain the dashboard", "what does this page do"],
+      "tests": ["what's this page", "explain the screen", "how do i use this", "what am i seeing"]
+    },
+    "concept": {
+      "scope": "concept", "description": "Definition of a concept or term (DAO, quorum, EIP-712, manifest, contract errors, rule codes)",
+      "examples": ["what is {term}", "what does {term} mean", "define {term}", "{term}?", "what is a dao", "what is quorum", "eip712?", "what is eip-712", "what is a delegate", "what is a multisig", "what is calldata", "what is a manifest", "explain the review window", "what is the sentinel", "what does chain-confirmed mean", "what is a likelihood ratio", "what is {rule}", "explain {rule}", "{rule}", "meaning of {term}", "what is bytecode", "what is a proxy upgrade", "what is a merkle root", "what is a hash", "what is prompt injection", "what is a smart contract", "what is ethereum", "what is gas", "what is a governor contract", "what is mUSDC", "what is the atlas token", "what is a digest", "what is preflight", "define review window", "what is an execution guard", "what is delegation", "what is a treasury", "whats a dao", "dao?", "quorum meaning", "what does quorum mean", "what is a dao exactly", "explain eip-712", "what's a multisig", "what's calldata", "what's a manifest", "what's a merkle tree", "what is a blockchain", "what is defi", "what is a token", "what is an nft", "what is staking", "what is a governance token", "what is token weighted voting", "what is a timelock", "what is a reentrancy attack", "what is a rug pull", "what is a sybil attack", "define gas", "what is a proxy contract", "what is delegatecall", "what's a hash", "what is {term}?", "explain {term}", "what is a flash loan", "what is a snapshot block", "what is a checkpoint", "what is a guardian", "what is a quorum threshold"],
+      "tests": ["what's a dao", "meaning of quorum", "what is {rule}?", "define manifest", "eip 712 meaning", "what's a snapshot"]
+    },
+    "how_to": {
+      "scope": "guide", "description": "How to do something in the app, or how a feature works",
+      "examples": ["how do i demo daoguard", "how do i run the prototype", "how do i halt a proposal", "how do i ask the proposer a question", "how do i verify the ledger", "how to create a proposal", "how do i use the 3d explorer", "how do i tie strings on the timeline", "walk me through the demo", "tutorial", "guide me", "how to start", "how to test a tampered payload", "how does proposer q&a work", "how does the sentinel work", "how does the manifest builder work", "how is runway calculated", "how does the evaluation chain work", "how do i install it", "how do i use the execution guardian", "how does verification work", "steps to demo", "how do i commit a version", "how do i cast a vote", "how does the guard work", "how is the combined estimate computed", "how is available balance calculated", "how are likelihood ratios used", "how does the review window work", "how do i export a report", "how do i add evidence", "how do i compare implementations", "how do i run the tour", "how do i reset the demo", "how do i switch to dark mode", "how does the ledger constellation work", "how do i connect two events", "how do i use the playbook", "how is the readiness score calculated", "how do i run a preflight", "how does the bytecode simulation work", "what happens after a vote passes", "what happens after approval", "what happens if the vote fails", "how does a proposal get executed", "proposal lifecycle", "what are the stages of a proposal", "what comes after voting", "how does a proposal become executable", "what can guardians do", "who can halt a proposal", "how long is the review window", "how are flash loan attacks prevented", "can someone use a flash loan to vote", "how does governance work here", "what is the process for a proposal", "how are votes counted"],
+      "tests": ["how do i demo this", "how does q&a work", "how to run it", "how is the risk score calculated", "what happens once a vote passes", "how do proposals get executed"]
+    },
+    "emergency_action": {
+      "scope": "proposal", "description": "Wanting to halt, stop, block or dispute a proposal",
+      "examples": ["halt it", "stop {p}", "block {p}", "cancel {p}", "kill it", "freeze the payout", "emergency stop", "can i halt {p}", "pause {p}", "veto", "dispute {p}", "halt {p} now", "stop the execution", "block the payout", "how do i stop it", "file a dispute", "stop this proposal", "block this", "stop the payout", "can we halt it", "i want to stop {p}", "emergency", "halt", "pull the plug", "freeze it", "how do i halt it"],
+      "tests": ["stop it", "halt this proposal", "can we block it"]
+    },
+    "report_generate": {
+      "scope": "proposal", "description": "Generating or exporting an audit or compliance report",
+      "examples": ["generate a report", "export a report", "download a report for {p}", "make a pdf", "audit report", "compliance report", "export csv", "report for {p}", "create a report", "export json", "i need a report", "pdf of {p}", "export the audit trail", "compliance export", "readiness score", "generate report", "export report", "download pdf", "make me a compliance report", "report please", "export {p} report", "create pdf report", "audit pdf", "export the ledger", "csv export"],
+      "tests": ["make a report", "export {p} as pdf", "compliance report please"]
+    },
+    "settings_policy": {
+      "scope": "global", "description": "Settings and policy: auto-halt, priors, likelihood ratios, severity overrides",
+      "examples": ["settings", "thresholds", "likelihood ratios", "priors", "is auto halt on", "policy", "risk model settings", "can i change the weights", "severity overrides", "configuration", "what are the priors", "auto-halt policy", "risk weights", "model parameters", "what's the auto-halt setting", "risk model", "what are the weights", "show priors", "likelihood ratio values", "policy settings", "is auto halt enabled", "severity settings"],
+      "tests": ["is auto-halt enabled", "show the settings", "what are the likelihood ratios"]
+    },
+    "elaborate": {
+      "scope": "followup", "description": "Asking for more detail or the reason behind the previous answer",
+      "examples": ["why", "why?", "tell me more", "more", "explain more", "go on", "details", "elaborate", "how so", "in detail", "expand", "and?", "more details please", "why is that", "explain why", "what does that mean", "can you go deeper", "say more", "dig deeper", "why so", "explain further", "why so?", "explain that", "and why", "more info", "expand on that", "details please", "keep going", "what else", "go into detail", "elaborate please", "how come"],
+      "tests": ["more please", "why's that", "go deeper", "tell me more about that"]
+    },
+    "followup_switch": {
+      "scope": "followup", "description": "Same question as before, about another proposal",
+      "examples": ["and {p}?", "what about {p}", "same for {p}", "how about {p}", "and for {p}", "{p} too?", "and {p}", "what about the other one", "same question for {p}", "and the {p} one?", "now {p}", "do the same for {p}", "what about {p} then", "same but for {p}", "now do {p}", "and what about {p}", "ok and {p}", "how about the other proposal"],
+      "tests": ["what about {p}?", "and {p} then", "same for {p} please"]
+    },
+    "out_of_scope": {
+      "scope": "general", "description": "General question unrelated to DAOGuard",
+      "examples": ["what's the weather", "tell me a joke", "who won the world cup", "write a poem", "what is the price of bitcoin", "recipe for pasta", "translate this to french", "what time is it", "play music", "book a flight", "who is the president", "what is the capital of france", "how tall is mount everest", "recommend a movie", "what's 2+2", "tell me something interesting", "how do i learn python", "what's the meaning of life", "sing a song", "write me an email", "news today", "who is taylor swift", "who invented bitcoin", "what's the best phone", "how old is the universe", "what is love", "tell me a story", "who is the ceo of google", "what's the stock market doing", "can you write code for me", "what's the population of india", "give me a recipe", "how far is the moon", "explain quantum physics", "what is machine learning", "what's bitcoin trading at", "who won yesterday's game", "how's the weather tomorrow"],
+      "tests": ["tell me a fun fact", "what's the capital of japan", "write a haiku", "who is elon musk"]
+    }
+  }
+}

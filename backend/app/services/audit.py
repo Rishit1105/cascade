@@ -209,3 +209,41 @@ def verify(db: Session, check_chain: bool = True) -> dict[str, Any]:
         "verified_at": iso(utcnow()),
         "note": "Hash links prove the ledger was not edited after the fact. They do not prove that the recorded off-chain statements are true.",
     }
+
+
+def verify_segment(db: Session, from_seq: int, to_seq: int) -> dict[str, Any]:
+    """Re-hashes one stretch of the ledger (both ends included) and re-confirms its transactions.
+
+    The first event is also checked against the event just before the stretch, so a segment that
+    verifies is provably attached to the rest of the chain, not just internally consistent."""
+    lo, hi = sorted((from_seq, to_seq))
+    before = db.scalars(select(AuditEvent).where(AuditEvent.seq < lo).order_by(AuditEvent.seq.desc()).limit(1)).first()
+    prev = before.event_hash if before else GENESIS_HASH
+    chain_ok = runtime.deployment is not None and runtime.chain.is_connected()
+    links: list[dict[str, Any]] = []
+    for ev in db.scalars(select(AuditEvent).where(AuditEvent.seq >= lo, AuditEvent.seq <= hi).order_by(AuditEvent.seq)):
+        problems = []
+        if ev.prev_hash != prev:
+            problems.append("prev_hash does not link to the previous event")
+        if compute_event_hash(ev, ev.prev_hash) != ev.event_hash:
+            problems.append("stored content does not match its event hash")
+        receipt = None
+        if ev.tx_hash and chain_ok:
+            r = runtime.chain.get_receipt(ev.tx_hash)
+            receipt = r is not None and (ev.block_number is None or int(r["blockNumber"], 16) == ev.block_number)
+            if not receipt:
+                problems.append("transaction receipt not found at the recorded block")
+        links.append({"seq": ev.seq, "event_type": ev.event_type, "event_hash": ev.event_hash, "prev_hash": ev.prev_hash,
+                      "ok": not problems, "problems": problems, "receipt_confirmed": receipt})
+        prev = ev.event_hash
+    return {
+        "ok": bool(links) and all(x["ok"] for x in links),
+        "from_seq": lo,
+        "to_seq": hi,
+        "events": len(links),
+        "receipts_checked": sum(1 for x in links if x["receipt_confirmed"] is not None),
+        "anchored_to": before.seq if before else 0,
+        "links": links,
+        "chain_checked": chain_ok,
+        "verified_at": iso(utcnow()),
+    }

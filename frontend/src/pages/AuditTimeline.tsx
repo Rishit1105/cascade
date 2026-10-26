@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Anchor, CheckCircle2, Download, Fingerprint, Link2, ShieldCheck, XCircle } from "lucide-react";
+import { Anchor, ArrowRight, CheckCircle2, Download, Fingerprint, Link2, ShieldCheck, XCircle } from "lucide-react";
 import { api, type AuditEvent } from "../lib/api";
 import { useApp } from "../lib/app";
-import { cx, dateTime, timeAgo, titleCase } from "../lib/format";
+import { cx, dateTime, titleCase } from "../lib/format";
 import { useAction, useAnchors, useAuditEvents, useProposals } from "../lib/queries";
 import { Modal } from "../components/overlays";
 import { Badge, Button, Callout, EmptyState, ErrorState, Hash, LoadingBlock, Panel, Tabs, TxLink, VerificationBadge } from "../components/ui";
 import { AnimatedNumber, GrowBar } from "../lib/motion";
+import { LedgerGraph } from "../components/LedgerGraph";
+import { suggestions } from "../lib/ledger";
 
 const DOT: Record<string, string> = { success: "bg-primary", failure: "bg-danger", warning: "bg-warning", info: "bg-info" };
-const RING: Record<string, string> = { success: "border-primary", failure: "border-danger", warning: "border-warning", info: "border-info" };
 
 export default function AuditTimeline() {
   const [params, setParams] = useSearchParams();
@@ -39,12 +40,7 @@ export default function AuditTimeline() {
   }, [params, inspect, setParams]);
 
   const items = events.data?.items ?? [];
-  const chrono = useMemo(() => [...items].reverse(), [items]);
   const current = items.find((e) => e.id === selected) ?? null;
-  const trackRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (trackRef.current && !selected) trackRef.current.scrollLeft = trackRef.current.scrollWidth;
-  }, [chrono.length, selected]);
 
   return (
     <div>
@@ -79,34 +75,8 @@ export default function AuditTimeline() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-4">
-          {tab === "timeline" && (
-            <Panel title="Audit trail timeline" subtitle={`${items.length} event(s) · oldest on the left · click a node to drill in`} bodyClassName="px-0">
-              {items.length === 0 && !events.isLoading && <EmptyState title="No events match the filters" />}
-              <div ref={trackRef} className="overflow-x-auto px-4 pb-4 scroll-thin">
-                <div className="relative flex min-h-[230px] items-center gap-0 py-6" style={{ width: Math.max(chrono.length * 132, 600) }}>
-                  <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-line-strong" />
-                  {chrono.map((e, i) => {
-                    const up = i % 2 === 0;
-                    const active = e.id === selected;
-                    return (
-                      <div key={e.id} className="relative flex w-[132px] shrink-0 justify-center">
-                        <button
-                          onClick={() => setSelected(active ? null : e.id)}
-                          className={cx("absolute w-[124px] rounded-lg border bg-surface p-2 text-left shadow-card transition-colors", up ? "bottom-[18px]" : "top-[18px]", active ? "border-fg ring-1 ring-fg/20" : "border-line hover:border-line-strong", e.status === "failure" && !active && "border-danger/40")}
-                        >
-                          <p className={cx("line-clamp-2 text-[11px] font-semibold leading-tight", e.status === "failure" ? "text-danger" : "text-fg")}>{titleCase(e.event_type)}</p>
-                          <p className="mt-0.5 truncate text-[10px] text-muted">{e.proposal_id ?? "system"}{e.tx_hash ? ` · #${e.block_number}` : ""}</p>
-                          <p className="truncate text-[10px] text-faint">{timeAgo(e.occurred_at)}</p>
-                        </button>
-                        <span className={cx("relative z-10 h-3.5 w-3.5 rounded-full border-[3px] bg-surface", RING[e.status], active && "scale-125")} />
-                        {e.verification === "chain-confirmed" && <Link2 className="absolute top-1/2 ml-6 h-3 w-3 -translate-y-1/2 text-primary" />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </Panel>
-          )}
+          {tab === "timeline" && items.length === 0 && !events.isLoading && <EmptyState title="No events match the filters" />}
+          {tab === "timeline" && items.length > 0 && <LedgerGraph events={items} selected={selected} onSelect={setSelected} />}
           {tab === "ledger" && (
             <Panel title="Ledger" bodyClassName="px-0">
               <div className="max-h-[720px] overflow-auto scroll-thin">
@@ -133,8 +103,11 @@ export default function AuditTimeline() {
           {tab === "timeline" && items.length > 0 && <LedgerAnalytics items={items} onPick={setSelected} selected={current} />}
         </div>
 
-        <Panel className="h-full" title="Event logs & evidence ledger" subtitle="event_hash = sha256(canonical(event) ‖ prev_hash)">
-          <div className="mb-3 grid grid-cols-2 gap-2">
+        {/* On wide screens the panel is pinned to the row's height (set by the left column) and its list
+            scrolls inside, so the column always ends level with the graph and analytics: no blank tail. */}
+        <div className="relative min-w-0 xl:min-h-[640px]">
+        <Panel className="xl:absolute xl:inset-0" bodyClassName="flex min-h-0 flex-1 flex-col" title="Event logs & evidence ledger" subtitle="event_hash = sha256(canonical(event) ‖ prev_hash)">
+          <div className="mb-3 grid shrink-0 grid-cols-2 gap-2">
             <a className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-line text-sm font-medium hover:bg-subtle" href={`/api/audit/export?format=json${proposal ? `&proposal=${proposal}` : ""}`} download>
               <Download className="h-3.5 w-3.5" /> Export JSON
             </a>
@@ -144,19 +117,19 @@ export default function AuditTimeline() {
             <Button variant="dark" data-tour="verify-ledger" icon={<ShieldCheck className="h-3.5 w-3.5" />} loading={verify.isPending} onClick={() => verify.mutate(undefined)}>Verify on-chain</Button>
             <Button icon={<Anchor className="h-3.5 w-3.5" />} loading={anchor.isPending} onClick={() => anchor.mutate(undefined)}>Anchor head</Button>
           </div>
-          <div className="max-h-[540px] space-y-2 overflow-y-auto pr-1 scroll-thin">
-            {items.slice(0, 40).map((e) => (
-              <button key={e.id} onClick={() => setSelected(e.id)} className={cx("block w-full rounded-lg border p-2.5 text-left", e.id === selected ? "border-fg" : "border-line hover:bg-subtle")}>
+          <div className="max-h-[540px] min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scroll-thin xl:max-h-none">
+            {items.map((e) => (
+              <button key={e.id} onClick={() => setSelected(e.id)} className={cx("block w-full min-w-0 cursor-pointer rounded-lg border p-2.5 text-left transition-colors", e.id === selected ? "border-fg" : "border-line hover:bg-subtle")}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-xs font-semibold">{titleCase(e.event_type)}</span>
-                  <span className="font-mono text-2xs text-faint">#{e.seq}</span>
+                  <span className="flex min-w-0 items-center gap-1.5 truncate text-xs font-semibold"><span className={cx("h-1.5 w-1.5 shrink-0 rounded-full", DOT[e.status])} />{titleCase(e.event_type)}</span>
+                  <span className="shrink-0 font-mono text-2xs text-faint">#{e.seq}</span>
                 </div>
-                <p className="mt-1 break-all font-mono text-[10.5px] text-muted">{e.event_hash.slice(0, 44)}…</p>
-                {e.tx_hash && <p className="mt-0.5 break-all font-mono text-[10.5px] text-primary">tx {e.tx_hash.slice(0, 30)}… #{e.block_number}</p>}
+                <p className="mt-1 truncate font-mono text-[10.5px] text-muted" title={e.event_hash}>{e.event_hash}</p>
+                {e.tx_hash && <p className="mt-0.5 truncate font-mono text-[10.5px] text-primary" title={e.tx_hash}>tx {e.tx_hash} · #{e.block_number}</p>}
               </button>
             ))}
           </div>
-          <div className="mt-3 border-t border-line pt-3">
+          <div className="mt-3 shrink-0 border-t border-line pt-3">
             <p className="label mb-1.5">On-chain anchors</p>
             {(anchors.data ?? []).slice(0, 4).map((a) => (
               <div key={a.tx_hash} className="flex items-center justify-between text-xs">
@@ -166,6 +139,7 @@ export default function AuditTimeline() {
             ))}
           </div>
         </Panel>
+        </div>
       </div>
 
       <Modal open={!!verifyResult} onClose={() => setVerifyResult(null)} title="Ledger verification" subtitle={verifyResult?.note}>
@@ -293,12 +267,77 @@ function LedgerAnalytics({ items, selected, onPick }: { items: AuditEvent[]; sel
       </Panel>
       <Panel title={selected ? "Event inspector" : "Newest event"} subtitle={selected ? "Selected on the timeline" : "Click any node on the timeline to inspect it"}>
         {focus && <EventDetail e={focus} />}
-        {!selected && items[1] && (
-          <button className="mt-3 text-xs font-medium text-primary hover:underline" onClick={() => onPick(items[1].id)}>
-            Inspect the previous event →
-          </button>
-        )}
+        {focus && <ChainNeighbours e={focus} items={items} onPick={onPick} />}
+        {focus && <RelatedEvents e={focus} items={items} onPick={onPick} />}
       </Panel>
+    </div>
+  );
+}
+
+/** The selected event between its neighbours, with the hash links that bind them checked in place. */
+function ChainNeighbours({ e, items, onPick }: { e: AuditEvent; items: AuditEvent[]; onPick: (id: string) => void }) {
+  const bySeq = new Map(items.map((x) => [x.seq, x]));
+  const prev = bySeq.get(e.seq - 1);
+  const next = bySeq.get(e.seq + 1);
+  const cell = (x: AuditEvent | undefined, label: string, here = false) =>
+    x ? (
+      <button onClick={() => !here && onPick(x.id)} disabled={here} className={cx("min-w-0 flex-1 rounded-lg border p-2 text-left transition-colors", here ? "border-primary/50 bg-primary/[0.06]" : "cursor-pointer border-line hover:bg-subtle")}>
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.06em] text-faint">{label} · #{x.seq}</span>
+        <span className="mt-0.5 block truncate text-[11.5px] font-semibold">{titleCase(x.event_type)}</span>
+        <span className="block truncate font-mono text-[10px] text-muted" title={x.event_hash}>…{x.event_hash.slice(-10)}</span>
+      </button>
+    ) : (
+      <span className="flex min-w-0 flex-1 items-center justify-center rounded-lg border border-dashed border-line p-2 text-center text-[10.5px] text-faint">{label === "Next" ? "Ledger head" : "Hidden by filters or genesis"}</span>
+    );
+  const link = (ok: boolean | null) => (
+    <span className={cx("flex shrink-0 flex-col items-center text-[9px] font-semibold", ok ? "text-primary" : ok === false ? "text-danger" : "text-faint")} title={ok ? "prev_hash matches the event before it" : ok === false ? "prev_hash does not match" : "neighbour not loaded"}>
+      <Link2 className="h-3.5 w-3.5" />
+      {ok ? "✓" : ok === false ? "✗" : "·"}
+    </span>
+  );
+  return (
+    <div className="mt-4">
+      <p className="label mb-1.5">Hash-chain neighbourhood</p>
+      <div className="flex items-center gap-1.5">
+        {cell(prev, "Previous")}
+        {link(prev ? e.prev_hash === prev.event_hash : null)}
+        {cell(e, "This event", true)}
+        {link(next ? next.prev_hash === e.event_hash : null)}
+        {cell(next, "Next")}
+      </div>
+      <p className="mt-1.5 text-[10.5px] text-faint">Each event stores the hash of the one before it, so changing any event breaks the ✓ on both sides.</p>
+    </div>
+  );
+}
+
+/** Events that share a transaction, manifest or record id with the selected one. */
+function RelatedEvents({ e, items, onPick }: { e: AuditEvent; items: AuditEvent[]; onPick: (id: string) => void }) {
+  const strong = suggestions(e, items, 4);
+  // Nothing shares an id: fall back to the nearest events in the same lane, so the panel stays useful.
+  const lane = items
+    .filter((x) => x.id !== e.id && x.proposal_id === e.proposal_id)
+    .sort((a, b) => Math.abs(a.seq - e.seq) - Math.abs(b.seq - e.seq))
+    .slice(0, 3)
+    .map((x) => ({ event: x, traits: [{ kind: "proposal" as const, label: e.proposal_id ? `Same proposal ${e.proposal_id}` : "Also a system event", value: "" }], score: 0 }));
+  const related = strong.length ? strong : lane;
+  return (
+    <div className="mt-4">
+      <p className="label mb-1.5">{strong.length ? `Related events · ${strong.length}` : "Nearest in the same lane"}</p>
+      {related.length === 0 && <p className="text-xs text-muted">No other event shares a transaction, manifest or record id with this one.</p>}
+      <ul className="space-y-1.5">
+        {related.map((s) => (
+          <li key={s.event.id}>
+            <button onClick={() => onPick(s.event.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-left transition-colors hover:bg-subtle">
+              <span className={cx("h-2 w-2 shrink-0 rounded-full", DOT[s.event.status])} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-medium">#{s.event.seq} {titleCase(s.event.event_type)}</span>
+                <span className="block truncate text-[10.5px] text-muted">{s.traits.slice(0, 2).map((t) => t.label).join(" · ")}</span>
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-faint" />
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

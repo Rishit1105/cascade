@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..errors import DomainError
 from ..models import Alert, AuditEvent, Proposal, Question, Simulation
-from ..services import governance, proposals, risk_chain, treasury, views
+from ..services import audit, governance, policy, proposals, risk_chain, treasury, views, voting
 from ..services.findings import active_findings
 from ..services.labels import format_units
 from . import kb
@@ -46,7 +46,7 @@ def list_proposals(db: Session) -> dict[str, Any]:
         gov = governance.state(db, p)
         ev = risk_chain.evaluate(db, p, gov)
         items.append({
-            "id": p.id, "title": p.title, "category": p.category, "status": p.status, "requested": item["requested_display"],
+            "id": p.id, "title": p.title, "category": p.category, "status": p.status, "requested": item["requested_display"], "requested_base": p.requested_amount_base,
             "proposer": p.proposer_label, "recipient": p.recipient_label, "guard_status": item["guard_status"],
             "open_findings_by_severity": item["open_findings"], "combined_estimate_pct": round(ev["overall"] * 100, 1),
             "riskiest_stage": max(ev["stages"], key=lambda s: s["posterior"])["name"], "page": f"/proposals/{p.id}",
@@ -171,6 +171,161 @@ def search_knowledge(db: Session, query: str) -> dict[str, Any]:
     return {"sections": [{"title": s.title, "content": s.body, "page": s.link} for _, s in hits] or [], "query": query}
 
 
+def get_votes(db: Session, proposal_id: str) -> dict[str, Any]:
+    p = _proposal(db, proposal_id)
+    gov = governance.state(db, p)
+    sel = (voting.overview(db, p.id) or {}).get("selected") or {}
+    voters = sorted(gov.get("voters") or [], key=lambda v: -int(v.get("weight") or 0))
+    return {
+        "proposal_id": p.id, "state": gov.get("state"), "governance_status": gov.get("governance_status"), "votes": gov.get("votes_display"),
+        "quorum_reached": gov.get("quorum_reached"), "participation_pct": gov.get("participation_pct"), "deadline_block": gov.get("deadline_block"),
+        "blocks_remaining": gov.get("blocks_remaining"), "current_block": gov.get("current_block"),
+        "unique_voters": sel.get("unique_voters"), "eligible_voters": sel.get("eligible_voters"), "count_by_side": (sel.get("distribution") or {}).get("by_count"),
+        "top_voters": [{"voter": v.get("voter_label") or v["voter"], "support": v["support"], "votes": format_units(int(v["weight"]), 18, 0), "reason": v.get("reason")} for v in voters[:8]],
+        "risk_signals": [{"level": s.get("level"), "title": s.get("title"), "detail": s.get("detail")} for s in sel.get("risk_signals") or []],
+        "voting_mode": gov.get("voting_mode"), "page": f"/voting?p={p.id}",
+    }
+
+
+def get_voting_power(db: Session) -> dict[str, Any]:
+    o = voting.overview(db, None)
+    c = o["concentration"]
+    return {
+        "holders_with_power": c["holders"], "top1_pct": c["top1_pct"], "top3_pct": c["top3_pct"], "hhi": c["hhi"], "hhi_band": c["hhi_band"],
+        "nakamoto_coefficient": c["nakamoto"], "gini": c["gini"], "definitions": o.get("metric_definitions", {}),
+        "largest_holders": [{"holder": r["label"], "voting_power": r["voting_power_display"], "role": r.get("role"), "delegates_to": r.get("delegates_to")} for r in o["power_table"][:8]],
+        "proposals": [{"proposal": x["proposal_id"], "state": x["state"], "participation_pct": x["participation_pct"]} for x in o.get("proposals", [])],
+        "page": "/voting",
+    }
+
+
+def get_versions(db: Session, proposal_id: str) -> dict[str, Any]:
+    p = _proposal(db, proposal_id)
+    vs = sorted(p.versions, key=lambda v: v.version)
+    latest_changes: list[dict[str, Any]] = []
+    if len(vs) >= 2:
+        d = proposals.version_diff(db, p, vs[-2].version, vs[-1].version)
+        latest_changes = [{"field": c["path"], "category": c["category"], "summary": c["summary"]} for c in d["changes"][:10]]
+    return {
+        "proposal_id": p.id, "current_version": p.current_version,
+        "versions": [{"version": v.version, "committed_at": v.committed_at.isoformat(), "author": v.author, "change_note": v.change_note,
+                      "changed_fields": v.changed_fields, "on_chain_tx": v.tx_hash, "manifest_hash": v.manifest_hash} for v in vs],
+        "latest_changes": latest_changes, "page": f"/versions?p={p.id}",
+    }
+
+
+def get_evidence(db: Session, proposal_id: str) -> dict[str, Any]:
+    p = _proposal(db, proposal_id)
+    return {
+        "proposal_id": p.id,
+        "documents": [{"name": e.name, "type": e.source_type, "verification": e.verification_status, "pages": len(e.pages or []), "content_hash": e.content_hash,
+                       "added_by": e.added_by, "prompt_injection_flags": len(e.injection_flags or [])} for e in p.evidence],
+        "note": "A content hash proves a document is unchanged since it was committed, not that it is true.", "page": f"/proposals/{p.id}?tab=evidence",
+    }
+
+
+def get_questions(db: Session, proposal_id: str) -> dict[str, Any]:
+    p = _proposal(db, proposal_id)
+    qs = list(db.scalars(select(Question).where(Question.proposal_id == p.id).order_by(Question.asked_at)))
+    return {
+        "proposal_id": p.id,
+        "questions": [{"question": q.text, "status": q.status, "rule": q.rule_id, "asked_by": q.asked_by, "replies": len(q.thread or []),
+                       "latest": ((q.thread or [{}])[-1].get("text") or "")[:240] if q.thread else None} for q in qs],
+        "counts": {s: sum(1 for q in qs if q.status == s) for s in ("open", "answered", "needs_more", "accepted", "withdrawn")},
+        "page": f"/proposals/{p.id}?tab=qa",
+    }
+
+
+def get_alerts(db: Session, proposal_id: str | None = None) -> dict[str, Any]:
+    q = select(Alert).where(Alert.status.in_(["new", "triaged", "escalated"])).order_by(Alert.created_at.desc())
+    if proposal_id:
+        q = q.where(Alert.proposal_id == str(proposal_id).upper())
+    rows = list(db.scalars(q))
+    return {
+        "open_alerts": [{"id": a.id, "severity": a.severity, "title": a.title, "proposal": a.proposal_id, "source": a.source, "status": a.status,
+                         "assignee": a.assignee, "raised": a.created_at.isoformat()} for a in rows],
+        "by_severity": {s: sum(1 for a in rows if a.severity == s) for s in ("critical", "high", "medium", "low")}, "page": "/escalation",
+    }
+
+
+def verify_ledger(db: Session) -> dict[str, Any]:
+    r = audit.verify(db)
+    return {"intact": r["ok"], "events": r["event_count"], "broken_links": len(r["breaks"]), "breaks": r["breaks"][:5],
+            "receipts_confirmed": r["chain_receipts"]["confirmed"], "receipts_checked": r["chain_receipts"]["checked"],
+            "anchors": [{"up_to": a["seq_upto"], "on_chain": a["found_on_chain"], "matches": a["matches_recomputed_ledger"]} for a in r["anchors"]],
+            "note": r["note"], "page": "/audit"}
+
+
+_REF = re.compile(r"(^|_)(id|hash)$")
+
+
+def _shared(a: AuditEvent, b: AuditEvent) -> list[str]:
+    out = []
+    if a.tx_hash and a.tx_hash == b.tx_hash:
+        out.append(f"same transaction {a.tx_hash[:12]}…")
+    if a.manifest_hash and a.manifest_hash == b.manifest_hash:
+        out.append(f"same approved manifest {a.manifest_hash[:12]}…")
+    ra = {v: k for k, v in (a.details or {}).items() if isinstance(v, str) and len(v) >= 6 and _REF.search(k)}
+    for k, v in (b.details or {}).items():
+        if isinstance(v, str) and v in ra:
+            out.append(f"both reference {k.replace('_', ' ')} {v}")
+    if a.proposal_id and a.proposal_id == b.proposal_id:
+        out.append(f"same proposal {a.proposal_id}" + (f" v{a.proposal_version}" if a.proposal_version and a.proposal_version == b.proposal_version else ""))
+    if a.actor == b.actor:
+        out.append(f"same actor ({a.actor})")
+    return out
+
+
+def get_ledger_connection(db: Session, from_seq: int, to_seq: int) -> dict[str, Any]:
+    lo, hi = sorted((int(from_seq), int(to_seq)))
+    a = db.scalars(select(AuditEvent).where(AuditEvent.seq == lo)).first()
+    b = db.scalars(select(AuditEvent).where(AuditEvent.seq == hi)).first()
+    if not a or not b:
+        raise DomainError("not_found", f"Ledger event #{lo if not a else hi} does not exist.")
+    seg = audit.verify_segment(db, lo, hi)
+    shared = _shared(a, b)
+    strong = any(s.startswith(("same transaction", "same approved manifest", "both reference")) for s in shared)
+    return {
+        "from": {"seq": a.seq, "type": a.event_type, "proposal": a.proposal_id, "when": a.occurred_at.isoformat(), "summary": a.summary[:200]},
+        "to": {"seq": b.seq, "type": b.event_type, "proposal": b.proposal_id, "when": b.occurred_at.isoformat(), "summary": b.summary[:200]},
+        "ledger_links_between": hi - lo, "seconds_apart": int((b.occurred_at - a.occurred_at).total_seconds()), "shared": shared,
+        "strength": "direct" if strong else "related" if shared else "hash chain only",
+        "segment_intact": seg["ok"], "segment_events": seg["events"], "receipts_rechecked": seg["receipts_checked"], "page": "/audit",
+    }
+
+
+def lookup_actor(db: Session, name: str) -> dict[str, Any]:
+    from rapidfuzz import fuzz, process
+
+    from ..models import AddressLabel
+
+    rows = list(db.scalars(select(AddressLabel)))
+    target = None
+    if re.fullmatch(r"0x[0-9a-fA-F]{40}", name.strip()):
+        target = next((r for r in rows if r.address.lower() == name.strip().lower()), None)
+    if target is None and rows:
+        best = process.extractOne(name, {i: r.label for i, r in enumerate(rows)}, scorer=fuzz.WRatio)
+        if best and best[1] >= 72:
+            target = rows[best[2]]
+    if target is None:
+        raise DomainError("not_found", f"No labelled address matches “{name}”.")
+    detail = views.address_detail(db, target.address)
+    addr = target.address.lower()
+    involved = [{"proposal": p.id, "role": "proposer" if (p.proposer_address or "").lower() == addr else "recipient", "title": p.title}
+                for p in db.scalars(select(Proposal)) if addr in ((p.proposer_address or "").lower(), (p.recipient_address or "").lower())]
+    votes = [{"proposal": e.proposal_id, "summary": e.summary[:160]} for e in db.scalars(select(AuditEvent).where(AuditEvent.event_type == "vote_cast", AuditEvent.actor == target.label))]
+    return {"label": target.label, "address": target.address, "kind": target.kind, "role": detail.get("role"), "is_contract": detail.get("is_contract"),
+            "balances": detail.get("balances"), "voting_power": detail.get("voting_power"), "proposals": involved, "votes": votes[:8],
+            "relationships": len(detail.get("relationships") or []), "note": detail.get("note"), "page": f"/relationships?focus={target.address}"}
+
+
+def get_policy(db: Session) -> dict[str, Any]:
+    pol = policy.get_policy(db)
+    rm = pol.get("risk_model", {})
+    return {"auto_halt_on_block_verdict": pol.get("auto_halt_on_block_verdict"), "severity_overrides": pol.get("severity_overrides"),
+            "priors": rm.get("priors"), "likelihood_ratios": rm.get("likelihood_ratios"), "description": rm.get("description"), "page": "/settings"}
+
+
 _PID_PROP = {"proposal_id": {"type": "string", "description": "Proposal id such as GOV-042"}}
 TOOLS: list[dict[str, Any]] = [
     {"name": "list_proposals", "description": "All proposals with status, amount, guard status, open findings and the evaluation chain's combined estimate. Use to compare or rank proposals.",
@@ -194,17 +349,43 @@ TOOLS: list[dict[str, Any]] = [
      "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
     {"name": "search_knowledge", "description": "Search the DAOGuard product guide (pages, features, concepts, how-to, limits) when you need exact product details.",
      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"], "additionalProperties": False}},
+    {"name": "get_votes", "description": "Vote result for a proposal: for/against/abstain, quorum, turnout, deadline, largest voters with reasons, and voting risk signals.",
+     "input_schema": {"type": "object", "properties": _PID_PROP, "required": ["proposal_id"], "additionalProperties": False}},
+    {"name": "get_voting_power", "description": "DAO-wide voting-power concentration (top-1/top-3 share, HHI, Nakamoto coefficient, Gini) and the largest holders.",
+     "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "get_versions", "description": "Committed versions of a proposal with authors, change notes, on-chain commitments and the field-level changes in the latest version.",
+     "input_schema": {"type": "object", "properties": _PID_PROP, "required": ["proposal_id"], "additionalProperties": False}},
+    {"name": "get_evidence", "description": "Evidence documents attached to a proposal with type, verification status, hash and prompt-injection flags.",
+     "input_schema": {"type": "object", "properties": _PID_PROP, "required": ["proposal_id"], "additionalProperties": False}},
+    {"name": "get_questions", "description": "Reviewer questions to the proposer (Q&A) for a proposal, with status and latest reply.",
+     "input_schema": {"type": "object", "properties": _PID_PROP, "required": ["proposal_id"], "additionalProperties": False}},
+    {"name": "get_alerts", "description": "Open alerts (severity, source, status, assignee), optionally for one proposal.",
+     "input_schema": {"type": "object", "properties": {"proposal_id": {"type": "string"}}, "additionalProperties": False}},
+    {"name": "verify_ledger", "description": "Re-hash the whole audit ledger and re-check transaction receipts and anchors (read-only).",
+     "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "get_ledger_connection", "description": "How two audit-ledger events (by sequence number) are connected: shared transaction/manifest/record ids, time apart, and whether the hash chain between them verifies.",
+     "input_schema": {"type": "object", "properties": {"from_seq": {"type": "integer", "minimum": 1}, "to_seq": {"type": "integer", "minimum": 1}}, "required": ["from_seq", "to_seq"], "additionalProperties": False}},
+    {"name": "lookup_actor", "description": "Look up a labelled address (delegate, proposer, recipient, contract) by name or 0x address: balances, voting power, proposals and votes.",
+     "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False}},
+    {"name": "get_policy", "description": "Current policy: auto-halt on BLOCK verdicts, severity overrides, evaluation-chain priors and likelihood ratios.",
+     "input_schema": {"type": "object", "properties": {}, "additionalProperties": False}},
 ]
 HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "list_proposals": list_proposals, "get_proposal": get_proposal, "get_evaluation": get_evaluation, "get_findings": get_findings,
     "get_treasury_impact": get_treasury_impact, "get_execution_status": get_execution_status, "get_conflicts": get_conflicts,
     "get_recent_activity": get_recent_activity, "get_treasury_overview": get_treasury_overview, "search_knowledge": search_knowledge,
+    "get_votes": get_votes, "get_voting_power": get_voting_power, "get_versions": get_versions, "get_evidence": get_evidence,
+    "get_questions": get_questions, "get_alerts": get_alerts, "verify_ledger": verify_ledger, "get_ledger_connection": get_ledger_connection,
+    "lookup_actor": lookup_actor, "get_policy": get_policy,
 }
 STATUS_TEXT = {
     "list_proposals": "Comparing all proposals", "get_proposal": "Reading {proposal_id}", "get_evaluation": "Checking the evaluation chain for {proposal_id}",
     "get_findings": "Reviewing findings for {proposal_id}", "get_treasury_impact": "Running the treasury model for {proposal_id}",
     "get_execution_status": "Checking the guard and simulations for {proposal_id}", "get_conflicts": "Tracing relationships for {proposal_id}",
     "get_recent_activity": "Reading the audit ledger", "get_treasury_overview": "Reading the treasury", "search_knowledge": "Searching the product guide",
+    "get_votes": "Counting the votes on {proposal_id}", "get_voting_power": "Measuring voting-power concentration", "get_versions": "Comparing versions of {proposal_id}",
+    "get_evidence": "Listing evidence for {proposal_id}", "get_questions": "Reading the Q&A for {proposal_id}", "get_alerts": "Checking open alerts",
+    "verify_ledger": "Re-hashing the audit ledger", "get_ledger_connection": "Tracing two ledger events", "lookup_actor": "Looking up {name}", "get_policy": "Reading the policy",
 }
 
 

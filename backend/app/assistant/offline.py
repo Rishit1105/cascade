@@ -1,29 +1,16 @@
-"""Built-in answer engine (no API key needed): intent routing over live data plus knowledge-base
-retrieval. Answers are composed from tool results, so every number is the app's own."""
+"""Answer composers and product terms shared by the local engine (engine.py): each composer turns
+live tool results into a focused markdown answer, so every number is the app's own."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..errors import DomainError
-from ..models import Proposal
 from . import kb, tools
 
-GREETING = re.compile(r"^\s*(hi|hello|hey|hiya|yo|good (morning|afternoon|evening)|namaste|greetings)\b[\s!.,]*$", re.I)
-THANKS = re.compile(r"\b(thanks|thank you|thx|cheers|great|awesome|perfect|nice)\b", re.I)
 PCT = re.compile(r"(\d{1,3})\s*%")
-ASPECTS: list[tuple[str, tuple[str, ...]]] = [
-    ("treasury", ("treasury", "runway", "budget", "money", "afford", "cost", "overrun", "balance", "burn", "fund", "milestone", "tranche", "payout")),
-    ("execution", ("execut", "guard", "simulat", "halt", "sentinel", "payload", "attack", "backdoor", "drain", "upgrade", "bytecode", "manifest", "tamper", "safe to run")),
-    ("conflicts", ("conflict", "relationship", "related", "transfer", "insider", "connected", "link", "self-dealing", "wallet")),
-    ("evaluation", ("risk", "evaluation", "score", "estimate", "probability", "how bad", "dangerous", "safe", "chain")),
-    ("findings", ("finding", "gap", "missing", "issue", "problem", "concern", "red flag", "wrong", "contradict", "question")),
-    ("activity", ("activity", "history", "happened", "timeline", "recent", "latest", "events", "log")),
-]
 
 
 def _last_pid(messages: list[dict[str, str]], context: dict[str, Any]) -> str | None:
@@ -33,14 +20,6 @@ def _last_pid(messages: list[dict[str, str]], context: dict[str, Any]) -> str | 
             return found[-1].upper()
     pid = (context or {}).get("proposal_id")
     return str(pid).upper() if pid and tools.PID.fullmatch(str(pid)) else None
-
-
-def _aspect(text: str) -> str | None:
-    t = text.lower()
-    for name, words in ASPECTS:
-        if any(w in t for w in words):
-            return name
-    return None
 
 
 def _sev(s: str) -> str:
@@ -116,7 +95,7 @@ def _evaluation(db: Session, pid: str) -> tuple[str, list[dict[str, str]], list[
             lines.append(f"- _{n}_")
         lines.append("")
     lines.append(f"Method: {ev['formula']}. {ev['label']}")
-    return "\n".join(lines), [_link("Evaluation chain on the Overview", "/"), _link("Edit likelihood ratios", "/settings")], ["get_evaluation"]
+    return "\n".join(lines), [_link("Evaluation chain on the Overview", "/overview"), _link("Edit likelihood ratios", "/settings")], ["get_evaluation"]
 
 
 def _findings(db: Session, pid: str) -> tuple[str, list[dict[str, str]], list[str]]:
@@ -174,7 +153,7 @@ def _execution(db: Session, pid: str) -> tuple[str, list[dict[str, str]], list[s
     lines = [f"### Execution status of {pid}", "", bottom, "", f"- ExecutionGuard approval: **{g['status']}**" + (f" (v{g['version']}, manifest `{(g.get('manifest_hash') or '')[:12]}…`)" if g.get("version") else "")]
     if g["status"] == "approved" and g.get("executable_at_block"):
         left = g["executable_at_block"] - (x["current_block"] or 0)
-        lines.append(f"- Review window: " + (f"{left} block(s) left" if left > 0 else f"elapsed (executable since block {g['executable_at_block']})"))
+        lines.append("- Review window: " + (f"{left} block(s) left" if left > 0 else f"elapsed (executable since block {g['executable_at_block']})"))
     if g["status"] == "halted":
         lines.append("- **Halted by the guardian/sentinel.** Execution fails with ProposalIsHalted; only a newer version approved by a new vote can run.")
     if x["recent_simulations"]:
@@ -219,7 +198,7 @@ def _ranking(db: Session) -> tuple[str, list[dict[str, str]], list[str]]:
         lines.append(f"{i}. **{p['id']} · {p['title']}** ({p['status']}, {p['requested']}): **{p['combined_estimate_pct']}%** combined; highest stage {p['riskiest_stage']}; {sev}; guard {p['guard_status']}")
     lines += ["", f"_{data['note']}_ Ask me about any of them for the details."]
     top = ranked[0]["id"] if ranked else "GOV-042"
-    return "\n".join(lines), [_link(f"Open {top}", f"/proposals/{top}"), _link("Overview", "/")], ["list_proposals"]
+    return "\n".join(lines), [_link(f"Open {top}", f"/proposals/{top}"), _link("Overview", "/overview")], ["list_proposals"]
 
 
 def _treasury_overview(db: Session) -> tuple[str, list[dict[str, str]], list[str]]:
@@ -324,46 +303,7 @@ I only read data. I never vote, execute, halt or change anything."""
 
 
 def answer(db: Session, messages: list[dict[str, str]], context: dict[str, Any]) -> dict[str, Any]:
-    text = (messages[-1]["content"] if messages else "").strip()
-    pid = _last_pid(messages, context)
-    if not text or re.fullmatch(r"(help|\?|what can you do\??|who are you\??)", text.lower()):
-        return {"text": CAPABILITIES, "links": [], "sources": ["assistant"], "suggestions": suggestions(context, pid)}
-    if GREETING.match(text):
-        return {"text": "Hello! " + CAPABILITIES.split("\n", 2)[2], "links": [], "sources": ["assistant"], "suggestions": suggestions(context, pid)}
-    if THANKS.search(text) and len(text) < 40:
-        return {"text": "Glad that helped. Anything else you'd like to check?", "links": [], "sources": [], "suggestions": suggestions(context, pid)}
+    """Non-streaming entry point; the local engine (engine.py) does the work."""
+    from . import engine
 
-    lower = text.lower()
-    mentioned = tools.PID.findall(text)
-    # "How does X work?" with no proposal named is about the product, even on a proposal's page.
-    concept = bool(re.match(r"\s*(what|how|why|explain|define|describe|tell me about|meaning)\b", lower)) and not mentioned and not re.search(r"\b(this|it|its)\b", lower)
-    try:
-        if re.search(r"\b(which|rank|compare|riskiest|worst|safest|all proposals|list (the )?proposals|every proposal)\b", lower) and not (len(mentioned) == 1 and "compare" not in lower):
-            body, links, src = _ranking(db)
-        elif pid and not concept and (mentioned or re.search(r"\b(this|it|its|the proposal|that one)\b", lower) or _aspect(lower)):
-            asp = _aspect(lower)
-            body, links, src = {
-                "treasury": lambda: _treasury(db, pid, text), "execution": lambda: _execution(db, pid), "conflicts": lambda: _conflicts(db, pid),
-                "evaluation": lambda: _evaluation(db, pid), "findings": lambda: _findings(db, pid), "activity": lambda: _activity(db, pid),
-            }.get(asp or "", lambda: _proposal_overview(db, pid))()
-        elif re.search(r"\b(treasury|balance|runway)\b", lower) and not re.search(r"\b(how|calculat|formula|explain)\b", lower):
-            body, links, src = _treasury_overview(db)
-        elif re.search(r"\b(alerts?|recent|latest|what happened|activity|going on)\b", lower) and not re.search(r"\bhow\b", lower):
-            body, links, src = _activity(db, None)
-        elif (t := _term(text)) is not None:
-            body, links, src = t
-        else:
-            k = _knowledge(text)
-            if k is None:
-                body = ("I couldn't match that to DAOGuard's data or guide. I'm running the **built-in engine** (no AI model key is configured), "
-                        "which answers about this prototype: its proposals, risks, treasury, execution checks, audit trail and how to use each page.\n\n"
-                        "Try rephrasing, pick a suggestion below, or add `ANTHROPIC_API_KEY` to `backend/.env` to enable open-ended answers from Claude.")
-                links, src = [], []
-            else:
-                body, links, src = k
-    except DomainError as exc:  # e.g. a proposal id that does not exist: say so and list the real ones
-        known = ", ".join(db.scalars(select(Proposal.id).order_by(Proposal.id)))
-        body, links, src = f"{exc.message} The proposals in this demo are {known}.", [_link("All proposals", "/proposals")], []
-    except Exception as exc:  # live data unavailable (e.g. chain restarting): say so plainly
-        body, links, src = f"I couldn't read the live data just now ({exc}). The chain may be restarting; please try again in a moment.", [], []
-    return {"text": body, "links": links, "sources": src, "suggestions": suggestions(context, pid)}
+    return engine.respond(db, messages, context, lambda kind, data: None, delay=0)

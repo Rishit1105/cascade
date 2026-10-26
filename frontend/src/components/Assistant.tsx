@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, ArrowUp, Bot, Check, Copy, Database, Eraser, Sparkles, Square, X } from "lucide-react";
+import { ArrowRight, ArrowUp, BookOpen, Bot, Check, Copy, Cpu, Database, Eraser, Sparkles, Square, X } from "lucide-react";
 import { api } from "../lib/api";
 import { cx } from "../lib/format";
 import { EASE, SPRING } from "../lib/motion";
@@ -18,6 +18,7 @@ interface Msg {
   sources?: string[];
   mode?: string;
   error?: boolean;
+  understanding?: { label: string; confidence: number; proposal: string | null; proposal_from: string | null; engine: string };
 }
 interface AssistantState {
   open: boolean;
@@ -152,7 +153,7 @@ function Launcher({ open, onOpen }: { open: boolean; onOpen: () => void }) {
 function AssistantPanel({ open, onClose, pending, clearPending }: { open: boolean; onClose: () => void; pending: string | null; clearPending: () => void }) {
   const loc = useLocation();
   const navigate = useNavigate();
-  const status = useQuery({ queryKey: ["assistant-status"], queryFn: () => api.get<{ mode: string; label: string; suggestions: string[] }>("/assistant/status"), staleTime: 60_000 });
+  const status = useQuery({ queryKey: ["assistant-status"], queryFn: () => api.get<{ mode: string; label: string; suggestions: string[]; local_llm?: { chat: boolean; chat_model: string | null } }>("/assistant/status"), staleTime: 60_000 });
   const [msgs, setMsgs] = useState<Msg[]>(loadHistory);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -202,7 +203,7 @@ function AssistantPanel({ open, onClose, pending, clearPending }: { open: boolea
             patch((r) => ({ ...r, content: r.content + data.text }));
           } else if (event === "meta") patch((r) => ({ ...r, mode: data.mode }));
           else if (event === "done") {
-            patch((r) => ({ ...r, links: data.links, sources: data.sources, mode: data.mode }));
+            patch((r) => ({ ...r, links: data.links, sources: data.sources, mode: data.mode, understanding: data.understanding }));
             setSuggestions(data.suggestions ?? []);
           } else if (event === "error") patch((r) => ({ ...r, content: r.content || data.message, error: true }));
         });
@@ -276,7 +277,7 @@ function AssistantPanel({ open, onClose, pending, clearPending }: { open: boolea
 
           {/* Conversation */}
           <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto px-4 py-4 scroll-thin" aria-live="polite">
-            {msgs.length === 0 && <Welcome offline={offline} suggestions={starter} onPick={(q) => void send(q)} />}
+            {msgs.length === 0 && <Welcome offline={offline} label={status.data?.label} llm={!!status.data?.local_llm?.chat} suggestions={starter} onPick={(q) => void send(q)} />}
             {msgs.map((m) => (
               <Bubble key={m.id} m={m} streaming={busy && m.id === msgs[msgs.length - 1]?.id} onNavigate={(to) => navigate(to)} />
             ))}
@@ -337,7 +338,7 @@ function AssistantPanel({ open, onClose, pending, clearPending }: { open: boolea
   );
 }
 
-function Welcome({ offline, suggestions, onPick }: { offline: boolean; suggestions: string[]; onPick: (q: string) => void }) {
+function Welcome({ offline, label, llm, suggestions, onPick }: { offline: boolean; label?: string; llm: boolean; suggestions: string[]; onPick: (q: string) => void }) {
   const caps = [
     ["Proposals", "summaries, gaps and contradictions"],
     ["Risk", "the evaluation chain, factor by factor"],
@@ -379,9 +380,13 @@ function Welcome({ offline, suggestions, onPick }: { offline: boolean; suggestio
         </div>
       </div>
       {offline && (
-        <p className="rounded-lg border border-dashed border-line px-3 py-2 text-[11px] text-muted">
-          Running the built-in engine over live data and the product guide. Add <code className="font-mono">ANTHROPIC_API_KEY</code> to <code className="font-mono">backend/.env</code> to switch on Claude for open-ended questions.
-        </p>
+        <div className="flex gap-2.5 rounded-lg border border-line bg-subtle/40 px-3 py-2.5 text-[11px] text-muted">
+          <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <p>
+            <span className="font-semibold text-fg">Runs on this computer.</span> {label ?? "Local engine"}. Nothing you type leaves your machine.
+            {!llm && <> Start Ollama with <code className="font-mono">qwen2.5:3b</code> for open-ended answers.</>} Short questions work: I use this page and our conversation for context.
+          </p>
+        </div>
       )}
     </motion.div>
   );
@@ -407,6 +412,14 @@ function Bubble({ m, streaming, onNavigate }: { m: Msg; streaming: boolean; onNa
           <Markdown text={m.content} onNavigate={() => undefined} />
           {streaming && <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse2 rounded-sm bg-primary" />}
         </div>
+        {!streaming && m.understanding && m.understanding.label && (
+          <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-faint" title="How the local engine read your question">
+            {m.understanding.engine === "local-llm" ? <Cpu className="h-3 w-3" /> : m.understanding.engine === "guide" ? <BookOpen className="h-3 w-3" /> : <Database className="h-3 w-3" />}
+            <span>Understood as <span className="font-semibold text-muted">{m.understanding.label}</span></span>
+            {m.understanding.proposal && <span>· {m.understanding.proposal}{m.understanding.proposal_from && m.understanding.proposal_from !== "message" ? ` (from ${m.understanding.proposal_from === "page" ? "this page" : "our conversation"})` : ""}</span>}
+            <span className="rounded bg-subtle px-1 font-mono">{Math.round(m.understanding.confidence * 100)}%</span>
+          </p>
+        )}
         {!streaming && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {(m.links ?? []).slice(0, 3).map((l) => (
@@ -427,7 +440,7 @@ function Bubble({ m, streaming, onNavigate }: { m: Msg; streaming: boolean; onNa
             </button>
             {m.sources && m.sources.length > 0 && (
               <span className="text-[10.5px] text-faint" title={m.sources.join(", ")}>
-                {m.mode === "claude" ? "Claude" : "Built-in"} · {m.sources.length} source{m.sources.length === 1 ? "" : "s"}
+                {m.mode === "claude" ? "Claude" : m.understanding?.engine === "local-llm" ? "Local LLM" : m.understanding?.engine === "guide" ? "Product guide" : "Live data"} · {m.sources.length} source{m.sources.length === 1 ? "" : "s"}
               </span>
             )}
           </div>

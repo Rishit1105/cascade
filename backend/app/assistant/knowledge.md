@@ -4,12 +4,12 @@ Each section is self-contained. "Keywords" help search; "Open" names the page th
 
 ## What DAOGuard is
 Keywords: about, overview, purpose, what is daoguard, mission, product, governance illusion, problem
-Open: /
+Open: /overview
 DAOGuard is governance intelligence plus execution assurance for DAO proposals. It answers three questions for every proposal: do voters understand what they are approving, will the chain execute exactly what they approved, and can anyone prove later what happened. Its tagline is "Understand the decision. Verify the execution. Preserve the evidence." It was built for CASCADE '26, Theme 4 (Information Asymmetry), Problem 1: The Governance Illusion, where voters approve proposals they cannot verify and the payload that executes can differ from the text they read. Everything in this prototype runs on a local Hardhat chain with fictional demo data (Atlas DAO, mUSDC, ATLAS); no real funds are involved.
 
 ## The three pillars
 Keywords: understand, verify, preserve, pillars, approach, how it works
-Open: /
+Open: /overview
 Understand: a cited brief, missing-information rules, contradiction and prompt-injection detection, a conflict-of-interest graph built from on-chain events, proposer Q&A with signed answers, and a treasury impact model in exact base units. Verify: governance approves one EIP-712 manifest digest; a sentinel simulates the approved payload inside a review window and can halt it on-chain; the ExecutionGuard contract executes only the exact approved digest, so any change reverts. Preserve: every action is appended to a hash-chained audit ledger whose head is anchored on-chain, and versions, disclosures and disputes are committed to a registry contract.
 
 ## Demo proposals
@@ -17,14 +17,19 @@ Keywords: demo, proposals, gov-041, gov-042, gov-043, gov-044, scenarios, seed d
 Open: /proposals
 The demo DAO, Atlas DAO, has four proposals. GOV-041 (Q3 security review retainer, Halcyon Security, 120,000 mUSDC) is already executed. GOV-042 (Ecosystem Development Grant for Northstar Builders, 500,000 mUSDC to Wallet A) is approved and executable; its forum post asks for 520,000 while the payload pays 500,000, and the proposer sent funds to the recipient before the proposal without disclosing it. GOV-043 (FeeVault v2 upgrade) has a passed vote awaiting finalisation; the text says the upgrade "moves no funds", but the submitted bytecode hard-codes an address that can drain the vault through syncAccounting(), unlike the implementation reviewers audited. GOV-044 (Q1 community meetups, 45,000 mUSDC) is a draft with missing information (no budget breakdown, no milestones, no disclosure) and a document containing a hidden prompt-injection attempt.
 
+## Landing page
+Keywords: landing page, home page, homepage, start page, intro, forge, chain forge, launch the app, welcome
+Open: /
+The landing page at / introduces DAOGuard before you enter the app. Scrolling through it forges a 3D blockchain: blocks start as loose, unverified coral wireframes, then one by one align, turn solid and mint, take their real ledger hash and lock to the previous block, telling the story in five stages (claims arrive loose, evidence gets hashed, votes bind the manifest, the guard enforces it, the ledger locks) with a live chain-integrity counter. It also shows live numbers from the running demo chain (current block, ledger events, chain-confirmed share, proposals guarded), a ticker of real ledger hashes, the governance-illusion attack (a tampered payload reverting with ManifestMismatch), the three guarantees, the platform features and the local assistant. Launch the app opens the Overview at /overview; the DAOGuard logo in the app's left rail returns to the landing page.
+
 ## Overview page
 Keywords: overview, dashboard, home, metrics, kpi, live ledger, in focus, open alerts, sentinel card
-Open: /
+Open: /overview
 The Overview shows a live ledger strip of the newest audit events, four headline metrics (active proposals, proposals needing review, executed vs blocked executions, allocation under review as a share of the on-chain treasury), the probabilistic evaluation chain for a selected proposal, a relationship map, the proposal in focus, open alerts, recent audit events and the sentinel's status with its live activity feed. The Guided tour button starts a ten-step walkthrough.
 
 ## Evaluation chain
 Keywords: evaluation chain, risk score, probability, bayes, likelihood ratio, prior, posterior, combined estimate, stages, model estimate
-Open: /
+Open: /overview
 The evaluation chain asks four questions in order: Proposal Claims (are claims evidenced and complete?), Conflict of Interest Risk (are relationships disclosed?), On-chain Voting (was participation healthy and independent?) and Execution Discrepancy (does what will execute match what was approved?). Each stage starts from a prior probability that a material issue exists and multiplies the odds by the likelihood ratio of each piece of evidence (Bayes in odds form). For example, a high missing-information finding has LR 2.2, an undisclosed transfer LR 3, a signed disclosure LR 0.8, a manifest mismatch LR 20 and a simulation BLOCK LR 25. The combined estimate is a model estimate to direct attention, not a probability of fraud. Every factor is listed, and priors and ratios are editable in Settings. Resolved or dismissed findings stop counting.
 
 ## Proposals workspace
@@ -113,19 +118,24 @@ Open: /settings
 ExecutionGuard holds the treasury and executes only the approved manifest digest, with a review window, replay protection, version checks and a guardian halt. Its custom errors are ManifestMismatch, NotApproved, AlreadyExecuted, ProposalIsHalted, ReviewWindowActive, StaleVersion, UnsupportedOperation (DELEGATECALL), EmptyManifest and ActionFailed. AtlasGovernor is an OpenZeppelin Governor whose only executable action is approveManifest. ProposalRegistry stores version commits verified by the proposer's EIP-712 disclosure signature, audit-ledger anchors and dispute hashes. A FeeVault proxy with honest and backdoored V2 implementations provides the upgrade scenario. Contracts use Solidity 0.8.28 and OpenZeppelin 5 on Hardhat.
 
 ## Audit ledger and verification
-Keywords: audit, ledger, timeline, hash chain, anchor, verify, tamper evident, receipts, export, evidence
+Keywords: audit, ledger, timeline, hash chain, anchor, verify, tamper evident, receipts, export, evidence, constellation, strings, connect events, segment
 Open: /audit
-Every event (analysis, votes, checks, executions, Q&A, halts) is appended to a ledger where each event hash is sha256 of the canonical event plus the previous hash. Off-chain records are labelled off-chain; chain-confirmed events link to their transaction. The ledger head is periodically anchored on-chain in ProposalRegistry. Verify on-chain re-hashes every event in order, re-checks each transaction receipt against the node and compares anchors; any edited, deleted or reordered event shows up as a broken link. Hash links prove the record was not edited; they do not prove off-chain statements are true.
+Every event (analysis, votes, checks, executions, Q&A, halts) is appended to a ledger where each event hash is sha256 of the canonical event plus the previous hash. Off-chain records are labelled off-chain; chain-confirmed events link to their transaction. The ledger head is periodically anchored on-chain in ProposalRegistry. Verify on-chain re-hashes every event in order, re-checks each transaction receipt against the node and compares anchors; any edited, deleted or reordered event shows up as a broken link. Hash links prove the record was not edited; they do not prove off-chain statements are true. The Audit page also shows ledger analytics (events per day, chain-confirmed share, most frequent event types) and an event inspector.
+
+## Ledger constellation and strings
+Keywords: constellation, graph, strings, tie, connect two events, link mode, drag, lanes, hash thread, segment verification, minimap, suggested strings
+Open: /audit
+The Audit page's dark ledger constellation draws one lane per proposal plus a system lane; every event is a node coloured by status (mint success, amber warning, coral failure, blue info) with a ring when chain-confirmed. A thread runs through all events in ledger order: that thread is the hash chain, and pulses travel along it. To tie a string, press on one event and release on another, or turn on Link mode and click two events, or select one and Shift+click a second (keyboard works with Enter). Selecting an event lights up related events and shows dashed suggested strings for events that share a transaction, manifest or record id. Opening a string shows how many ledger links and how much time separate the events, what they share (same transaction, same approved manifest, same question or simulation id, same proposal version, same actor) and a strength: direct, related or hash chain only. Verify re-hashes every event between the two ends on the server and re-confirms their transaction receipts, checking the first event against the one before it so the segment is attached to the whole chain. Zoom, fit and the minimap move around the graph; strings are remembered in your browser. Ask the assistant to explain any string.
 
 ## Risk escalation
-Keywords: escalation, alerts, incidents, triage, acknowledge, escalate, resolve, dismiss, emergency actions
+Keywords: escalation, alerts, incidents, triage, acknowledge, escalate, resolve, dismiss, emergency actions, playbook, threat matrix, defence layers, response pipeline
 Open: /escalation
-The escalation inbox lists alerts by severity (critical, high, medium) raised by findings, execution attempts and simulations. Each alert can be assigned, acknowledged, escalated, resolved or dismissed with a written justification recorded in the ledger. Emergency actions include the on-chain guardian halt. The page also shows the escalated risk profile, the response log, live sentinel activity, execution attempts and open findings.
+The escalation page opens with a command strip: threat posture (an A to F rating ring from the selected alert's evaluation chain), the open-alert mix by severity, the response pipeline (new, triaged, escalated, closed, with the share of open alerts that have an owner) and the defence layers (governance approval, review window, sentinel simulation, ExecutionGuard). The alert queue groups alerts by severity. The selected incident shows a lifecycle stepper (detected, triaged, contained, resolved) and a plain-language reading: what happened, why it matters and what to do next. Alerts can be assigned, acknowledged, escalated, resolved or dismissed with a written justification recorded in the ledger. The response playbook lists the standard steps for that kind of alert, ticks them off from the alert's history and links to the page where each is done. The risk radar plots the four evaluation stages; the threat matrix counts open findings by severity and type and filters the list when clicked; the attempt track shows every execution attempt (blocked, executed, not sent) with the transaction details. Emergency actions include the on-chain guardian halt (only while an approval is pending), a cryptographic dispute and an in-app delegate notification.
 
 ## Reports and export
-Keywords: reports, export, pdf, json, csv, compliance, download, evidence pack
+Keywords: reports, export, pdf, json, csv, compliance, download, evidence pack, readiness score, control coverage, report builder, scorecard
 Open: /reports
-The reports page generates PDF audit reports per proposal and exports the ledger as JSON or CSV. Reports keep evidence labels (chain-confirmed, off-chain, verified, heuristic), the demo-data notice, generation time, chain id and block, and the limitations of every method. Heuristics are never presented as facts.
+The Compliance page opens with a readiness scorecard: a 0 to 100 score that is a weighted composite of four measures, each shown with its weight and points: ledger integrity (30%, verified intact counts fully, not yet verified counts half), chain-confirmed events (20%), open severe alerts (20%, minus 15 points each) and control coverage (30%). It is a summary, not a certification. The control coverage matrix reads the audit ledger to show, per proposal, whether each control is evidenced: signed disclosure, evidence committed, on-chain version, brief, vote, simulation, Q&A closed and report generated. The historical-logs chart shows events per day split into chain-confirmed and off-chain, with cumulative ledger growth and the daily average. The report builder generates a PDF, JSON or CSV report for a proposal with the sections you choose; every report keeps evidence labels (chain-confirmed, off-chain, verified, heuristic), the demo-data notice, generation time, chain id and block, and the limitations of every method, and its SHA-256 is recorded in the ledger. Heuristics are never presented as facts.
 
 ## Settings and risk model
 Keywords: settings, policy, risk model, likelihood ratios, priors, auto halt, rule severity, ai provider, api key, reset demo, persona
@@ -134,12 +144,12 @@ Settings control the autonomous response (halt on BLOCK verdict), per-rule sever
 
 ## Guided tour
 Keywords: tour, guided tour, walkthrough, onboarding, demo script, how to demo, presentation
-Open: /
+Open: /overview
 The guided tour (compass icon in the top bar, or Guided tour on the Overview) has ten steps: welcome, evaluation chain, GOV-042 brief, relationships, accepting GOV-044's answer in Q&A, executing a tampered payload, the manifest builder, finalising GOV-043 so the sentinel halts it, verifying the ledger, and resetting the demo. Steps that need an action wait for you and detect completion from live events.
 
 ## How to demo DAOGuard in five minutes
 Keywords: demo steps, pitch, presentation, judges, walkthrough, script, how do i show
-Open: /
+Open: /overview
 1. Overview: point at the evaluation chain and the live ledger.
 2. Proposals → GOV-042: the 520k vs 500k contradiction and the undisclosed transfer.
 3. Execution guardian → GOV-042 → Changed recipient → Run preflight → Execute guarded demo: the coral barrier and an on-chain ManifestMismatch revert.
@@ -155,7 +165,7 @@ Run npm run setup once, then npm run dev from the project folder (or double-clic
 
 ## Technology stack
 Keywords: tech stack, architecture, technologies, react, fastapi, python, typescript, hardhat, web3, sqlite, three.js, motion
-Open: /
+Open: /overview
 Frontend: React 18, TypeScript, Vite, Tailwind, React Query, Recharts, d3-force, three.js (lazy-loaded) and motion.dev for animation, with live updates over Server-Sent Events. Backend: FastAPI, Pydantic, SQLAlchemy with SQLite, web3.py, eth-abi and eth-account, an optional Claude model. Contracts: Solidity 0.8.28, OpenZeppelin 5, Hardhat. Tests: 25 contract, 52 backend and 5 frontend tests.
 
 ## Security model and honest limits
@@ -163,12 +173,23 @@ Keywords: limits, limitations, security, trust, guarantees, what it cannot do, s
 Open: /audit
 A hash proves equality with what was committed, not truth. A transfer edge proves value moved, not common ownership. Simulation covers the probed callers and the current state, so it cannot prove the absence of backdoors gated on secret arguments. The guard only protects execution routed through it. Votes are cast by demo delegate accounts. Accepting a proposer's answer records a reviewer's judgement, not truth. This is a prototype: no real treasury and no audited contracts.
 
+## Proposal lifecycle
+Keywords: lifecycle, stages, draft, commit, submit, vote, approve, execute, halted, next step, process, how a proposal works
+Open: /proposals
+A proposal starts as a draft. Committing a version records its content hash, manifest digest, evidence Merkle root and the proposer's EIP-712-signed disclosure in ProposalRegistry on-chain. Submitting puts that version to the Atlas Governor: after a 1-block voting delay, ATLAS holders vote for 24 blocks, and at least 4% of supply must vote for or abstain. A successful vote calls approveManifest on the ExecutionGuard, which opens a 5-block review window; the sentinel simulates the approved manifest inside it and can halt it on a BLOCK verdict. After the window, only the exact approved payload can execute, once. Any change to the proposal creates a new version that needs a new vote. In the demo, GOV-041 has executed, GOV-042 is approved, GOV-043 is in voting and GOV-044 is a draft.
+
+## Governance attacks and defences
+Keywords: flash loan, governance attack, vote buying, borrowed votes, snapshot, checkpoint, whale, 51%, bribery, malicious proposal, payload swap, backdoor, takeover, sybil
+Open: /voting
+Flash-loan governance attacks borrow tokens for one block to swing a vote. Atlas DAO counts voting power from ATLAS checkpoints at each proposal's snapshot block, taken before voting opens, so tokens borrowed while a vote is live carry no weight. Concentrated power is measured instead of assumed: the Voting page reports the top holders' share, the Nakamoto coefficient, Gini and HHI, and flags decisive voters and recipient-delegated power. Payload swaps (voting on one thing and executing another) are blocked by the ExecutionGuard, which recomputes the EIP-712 manifest digest and reverts on any change. Malicious upgrades such as GOV-043's backdoored implementation are caught by bytecode simulation and the sentinel during the review window, and a guardian can halt an approval but never approve or execute one. Undisclosed relationships, a common route to self-dealing, surface as conflict-of-interest leads. None of this stops a genuine majority from approving a bad idea: DAOGuard makes the decision legible, it does not make it for voters.
+
 ## Glossary
 Keywords: glossary, define, definition, terms
-Open: /
+Open: /overview
 DAO: an organisation that governs a shared treasury by token votes. Manifest: the exact actions a proposal executes. EIP-712: a standard for hashing and signing typed data. ExecutionGuard: the contract that executes only the approved digest. Sentinel: the service that simulates approvals and can halt them. Review window: blocks between approval and earliest execution. Preflight: a read-only call predicting whether a payload would execute. Likelihood ratio: how much one piece of evidence multiplies the odds of an issue. Audit ledger: the append-only, hash-chained record of every event. mUSDC: the fictional 6-decimal demo stablecoin. ATLAS: the demo governance token.
 
 ## Assistant capabilities
-Keywords: assistant, chatbot, what can you do, help, capabilities, copilot
-Open: /
-The DAOGuard assistant answers questions about the prototype and its live data: proposal status and risks, findings and gaps, conflicts of interest, treasury impact and runway, votes, execution and sentinel results, recent activity and how to use every page. It reads data only; it never votes, executes, halts or changes anything. With an Anthropic API key it uses Claude with live-data tools; without one it runs a built-in engine over this knowledge base and the live data.
+Keywords: assistant, chatbot, what can you do, help, capabilities, copilot, local ai, offline, ollama, qwen, trained model, privacy
+Open: /overview
+The DAOGuard assistant answers questions about the prototype and its live data: proposal summaries, amounts, recipients, proposers, status, purpose, milestones, risk, findings, conflicts, treasury impact, votes and voting power, versions, evidence, Q&A, alerts, the audit ledger and connections between ledger events, and how every page works. Short questions work: it uses the page you are on and the conversation for context, “why?” goes deeper and “and 43?” repeats the last question for another proposal. Without an API key it runs fully on this computer: a locally trained intent model (TF-IDF features and logistic regression over a labelled dataset, about 98% accurate on held-out phrasings) understands the question, focused composers answer from live data, nomic-embed-text adds meaning-based search and Qwen2.5 3B answers open-ended questions, both through Ollama. Nothing leaves the machine. With an Anthropic API key it uses Claude with the same read-only tools. It never votes, executes, halts or changes anything. Retrain the intent model with: python -m app.assistant.train
+

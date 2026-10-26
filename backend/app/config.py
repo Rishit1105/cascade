@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     )
     ai_model: str = "claude-opus-5-5"
 
+    # Local, open-source assistant models served by Ollama (optional; the trained intent model
+    # and the answer composers work without them).
+    ollama_url: str = "http://127.0.0.1:11434"
+    local_llm_model: str = "qwen2.5:3b"
+    local_embed_model: str = "nomic-embed-text"
+    local_llm_enabled: bool = True
+
     # Governance parameters for the local demo deployment (blocks, not seconds).
     review_window_blocks: int = 5
     voting_delay_blocks: int = 1

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell, Blocks, BookOpenCheck, Compass, FileText, GitCompareArrows, Landmark, LayoutDashboard, Loader2, Menu, Moon, Network, Radar,
   ScrollText, Search, Settings, ShieldCheck, Siren, Sun, Vote, X,
@@ -17,7 +17,7 @@ import { useTour } from "../lib/tour";
 import { AssistantButton } from "./Assistant";
 
 export const NAV = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/overview", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/proposals", label: "Proposals", icon: FileText },
   { to: "/relationships", label: "Relationships", icon: Network },
   { to: "/versions", label: "Version history", icon: GitCompareArrows },
@@ -47,10 +47,12 @@ export function Logo({ compact }: { compact?: boolean }) {
 
 function Rail() {
   return (
-    <nav aria-label="Primary" className="sticky top-0 hidden h-screen w-[64px] shrink-0 flex-col items-center border-r border-line bg-surface py-3 md:flex">
-      <div className="mb-4">
+    // z-[35]: sticky makes the rail its own stacking context, so its hover labels can only rise above
+    // the page (whose animated cards paint later) if the rail itself does. Overlays (45+) stay on top.
+    <nav aria-label="Primary" className="sticky top-0 z-[35] hidden h-screen w-[64px] shrink-0 flex-col items-center border-r border-line bg-surface py-3 md:flex">
+      <Link to="/" className="mb-4 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label="DAOGuard home page" title="Home">
         <Logo compact />
-      </div>
+      </Link>
       <div className="flex flex-1 flex-col items-center gap-1">
         {NAV.map((n) => (
           <NavLink

@@ -180,10 +180,10 @@ def test_treasury_surface_matches_the_existing_projection(client):
     assert client.get(f"{base}/surface", params={"overruns": "x"}).status_code == 422
 
 
-def chat(client, question, page="/", history=()):
+def chat(client, question, page="/", history=(), proposal=None):
     """Posts one question and returns (event names, answer text, done payload) from the SSE stream."""
     messages = [*history, {"role": "user", "content": question}]
-    r = client.post("/api/assistant/chat", json={"messages": messages, "context": {"page": page}})
+    r = client.post("/api/assistant/chat", json={"messages": messages, "context": {"path": page, "proposal_id": proposal}})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream"), r.text
     events = []
     for block in r.text.strip().split("\n\n"):
@@ -195,7 +195,7 @@ def chat(client, question, page="/", history=()):
 
 def test_assistant_answers_from_live_data(client):
     status = ok(client.get("/api/assistant/status"))
-    assert status["mode"] == "offline" and status["suggestions"]
+    assert status["mode"] == "local" and status["suggestions"] and status["training"]["intents"] >= 40
 
     names, text, done = chat(client, "What happens to the treasury if GOV-042 overruns by 10%?")
     assert names[0] == "meta" and names[-1] == "done" and "error" not in names
@@ -215,6 +215,28 @@ def test_assistant_answers_from_live_data(client):
 
     _, unknown, _ = chat(client, "Tell me about GOV-999")
     assert "GOV-999 does not exist" in unknown and all(pid in unknown for pid in combined) and "restarting" not in unknown
+
+    # Minimal questions use the page's proposal; names, numbers and typos resolve to proposals.
+    _, amount, done = chat(client, "how much", page="/proposals/GOV-044", proposal="GOV-044")
+    assert "45,000 mUSDC" in amount and done["understanding"] == {**done["understanding"], "intent": "proposal_amount", "proposal": "GOV-044", "proposal_from": "page"}
+    _, votes, done = chat(client, "votes on 43")
+    v = ok(client.get("/api/proposals/GOV-043/governance"))
+    assert done["understanding"]["intent"] == "vote_result" and v["votes_display"]["for"] in votes and f"{v['participation_pct']}%" in votes
+    _, again, done = chat(client, "and 42?", history=[{"role": "user", "content": "votes on 43"}, {"role": "assistant", "content": votes}])
+    assert done["understanding"]["intent"] == "vote_result" and done["understanding"]["proposal"] == "GOV-042" and "Vote on GOV-042" in again
+    _, risk, _ = chat(client, "nortstar risk")
+    assert "GOV-042" in risk and "combined estimate" in risk
+    # "Why?" goes deeper instead of repeating the answer.
+    _, why, _ = chat(client, "why?", history=[{"role": "user", "content": "Which proposal is riskiest?"}, {"role": "assistant", "content": ranking}])
+    assert "ranks first because" in why and why != ranking
+    # Ledger strings: two events by number, with the segment re-verified.
+    _, link, done = chat(client, "how are #5 and #18 connected", page="/audit")
+    assert done["sources"] == ["get_ledger_connection"] and "Segment check: ✓ intact" in link
+    seg = ok(client.get("/api/audit/verify-range", params={"from_seq": 18, "to_seq": 5}))
+    assert seg["ok"] and (seg["from_seq"], seg["to_seq"], seg["events"]) == (5, 18, 14) and seg["anchored_to"] == 4
+    assert client.get("/api/audit/verify-range", params={"from_seq": 1, "to_seq": 5000}).status_code == 422
+    _, cross, _ = chat(client, "who gets the money")  # no proposal anywhere: answer for all of them
+    assert "Recipients" in cross and all(pid in cross for pid in combined)
     assert client.post("/api/assistant/chat", json={"messages": []}).status_code == 422
     assert client.post("/api/assistant/chat", json={"messages": [{"role": "system", "content": "x"}]}).status_code == 422
 

@@ -17,6 +17,8 @@ Open http://127.0.0.1:5173. The first start deploys the contracts and seeds a 30
 
 Requirements: Node 20.11+, Python 3.11+. Optional: `ANTHROPIC_API_KEY` in `backend/.env` enables Claude interpretation of documents (see `backend/.env.example`). Without a key the brief is a clearly labelled deterministic extraction.
 
+The assistant (Ctrl+J) runs locally without a key: a locally trained intent model (`backend/app/assistant/data/intents.json`, about 98% on held-out phrasings) and live-data answer composers. For meaning-based search and open-ended answers, install [Ollama](https://ollama.com) and run `npm run setup:ai`, which pulls the open-source `nomic-embed-text` and `qwen2.5:3b` models and retrains and evaluates the intent model. Nothing leaves the machine.
+
 ## Architecture
 
 | Layer | Tech | What it does |

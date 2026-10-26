@@ -287,7 +287,7 @@ def test_assistant_knowledge_search_finds_the_right_section(question, section):
 def test_assistant_knowledge_links_point_at_real_pages():
     from app.assistant import kb
 
-    pages = {"/", "/proposals", "/relationships", "/versions", "/financial", "/voting", "/guardian", "/audit", "/escalation", "/reports", "/settings"}
+    pages = {"/", "/overview", "/proposals", "/relationships", "/versions", "/financial", "/voting", "/guardian", "/audit", "/escalation", "/reports", "/settings"}
     for s in kb.sections():
         path = s.link.split("?")[0]
         assert path in pages or path.startswith("/proposals/GOV-"), (s.title, s.link)
@@ -310,8 +310,8 @@ def test_assistant_tool_inputs_are_validated():
 def test_assistant_offline_answers_terms_rules_and_unknowns():
     from app.assistant import offline
 
-    def ask(text):  # these routes never touch the database
-        return offline.answer(None, [{"role": "user", "content": text}], {"page": "/"})
+    def ask(text):  # these routes never touch the database (the local LLM is disabled in tests)
+        return offline.answer(None, [{"role": "user", "content": text}], {"path": "/"})
 
     mismatch = ask("What does ManifestMismatch mean?")
     assert mismatch["text"].startswith("### ManifestMismatch") and "digest" in mismatch["text"] and mismatch["links"]
@@ -320,6 +320,37 @@ def test_assistant_offline_answers_terms_rules_and_unknowns():
     assert "Manifest digest mismatch" in ask("explain DG-R000")["text"]  # payload titles come from the rule engine
     assert ask("How do I demo DAOGuard in 5 minutes?")["sources"] == ["guide: How to demo DAOGuard in five minutes"]
     assert ask("hello")["sources"] == ["assistant"]
+    assert ask("what is on the landing page")["sources"] == ["guide: Landing page"]  # a named page beats the current one
+    assert ask("what is a dao")["text"].startswith("### DAO") and "daoguard" not in ask("what is daoguard")["text"][:12].lower()
     unknown = ask("What's the weather in Paris?")
-    assert unknown["sources"] == [] and "ANTHROPIC_API_KEY" in unknown["text"]
+    assert unknown["understanding"]["intent"] == "out_of_scope" and "outside DAOGuard" in unknown["text"]
     assert all(len(x["suggestions"]) >= 2 for x in (mismatch, rule, unknown))
+
+
+def test_assistant_entities_handle_names_typos_numbers_and_context_words():
+    from app.assistant.train import fixture_index
+
+    idx = fixture_index()
+    e = idx.extract("how risky is nortstar")
+    assert e.proposals == ["GOV-042"] and e.masked == "how risky is PROPX"
+    assert idx.extract("fee valut safe?").proposals == ["GOV-043"]  # two-word typo
+    assert idx.extract("whats halcyon retainer").masked == "whats PROPX"  # one proposal named twice
+    e = idx.extract("what if 42 goes 40 percent over budget with milestones")
+    assert (e.proposals, e.pct, e.release) == (["GOV-042"], 40, "milestones")
+    assert idx.extract("how are #5 and #18 connected").seqs == [5, 18]
+    assert idx.extract("who is kestrel").actors == ["Delegate · Kestrel"]
+    assert idx.extract("compare gov 41 and the upgrade").proposals == ["GOV-041", "GOV-043"]
+    # Ordinary words never become proposals or contract errors.
+    assert idx.extract("latest events and security alerts").proposals == []
+    assert idx.extract("is it already executed").terms == []
+    assert idx.extract("runway for 12 months").proposals == []
+
+
+def test_assistant_intent_model_generalises_to_held_out_phrasings():
+    from app.assistant import nlu
+    from app.assistant.train import evaluate, fixture_index
+
+    tests = [(t, name) for name, spec in nlu.load_data().items() for t in spec.get("tests", [])]
+    assert len(tests) >= 150
+    report = evaluate(nlu.model(), tests, fixture_index(), use_knn=False)
+    assert report["accuracy"] >= 0.92, report["misses"]

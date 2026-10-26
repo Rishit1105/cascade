@@ -393,9 +393,10 @@ export function CopyButton({ value, label = "Copy" }: { value: string; label?: s
 export function Hash({ value, head = 10, tail = 6, className, copy = true }: { value?: string | null; head?: number; tail?: number; className?: string; copy?: boolean }) {
   if (!value) return <span className="text-faint">—</span>;
   return (
-    <span className={cx("inline-flex min-w-0 items-center gap-0.5 font-mono text-xs", className)} title={value}>
-      <span className="truncate">{shortHash(value, head, tail)}</span>
-      {copy && <CopyButton value={value} />}
+    // max-w-full + min-w-0 let the hash shrink and ellipsize inside narrow boxes instead of overflowing them.
+    <span className={cx("inline-flex min-w-0 max-w-full items-center gap-0.5 font-mono text-xs", className)} title={value}>
+      <span className="min-w-0 truncate">{shortHash(value, head, tail)}</span>
+      {copy && <span className="shrink-0"><CopyButton value={value} /></span>}
     </span>
   );
 }

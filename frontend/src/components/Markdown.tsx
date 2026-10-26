@@ -74,14 +74,40 @@ export function Markdown({ text, onNavigate, className }: { text: string; onNavi
       );
       continue;
     }
+    if (line.trim().startsWith("|") && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+      const cells = (l: string) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const head = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(cells(lines[i++]));
+      blocks.push(
+        <div key={i} className="mt-2 overflow-x-auto rounded-lg border border-line">
+          <table className="w-full border-collapse text-[12px]">
+            <thead>
+              <tr className="bg-subtle/70">
+                {head.map((h, k) => <th key={k} className="whitespace-nowrap px-2.5 py-1.5 text-left text-[11px] font-semibold text-muted">{inline(h, onNavigate)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri} className="border-t border-line">
+                  {r.map((c, k) => <td key={k} className="px-2.5 py-1.5 align-top">{inline(c, onNavigate)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
     if (line.startsWith(">")) {
       const q: string[] = [];
       while (i < lines.length && lines[i].startsWith(">")) q.push(lines[i++].replace(/^>\s?/, ""));
       blocks.push(<blockquote key={i} className="mt-2 border-l-2 border-primary/40 bg-primary/[0.04] py-1.5 pl-3 pr-2 text-muted">{inline(q.join(" "), onNavigate)}</blockquote>);
       continue;
     }
-    const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\s*[-*]\s+|\s*\d+[.)]\s+|>)/.test(lines[i])) para.push(lines[i++]);
+    const para: string[] = [lines[i++]]; // always consume the first line, so a stray "|" line cannot stall the loop
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\s*[-*]\s+|\s*\d+[.)]\s+|>|\s*\|)/.test(lines[i])) para.push(lines[i++]);
     blocks.push(<p key={i} className={cx(blocks.length > 0 && "mt-2")}>{inline(para.join(" "), onNavigate)}</p>);
   }
   return <div className={cx("text-[13px] leading-relaxed text-fg", className)}>{blocks}</div>;

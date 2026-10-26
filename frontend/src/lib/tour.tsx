@@ -19,13 +19,13 @@ export interface TourStep {
 export const TOUR: TourStep[] = [
   {
     id: "welcome",
-    route: "/",
+    route: "/overview",
     title: "Welcome to DAOGuard",
     body: "This tour follows Atlas DAO through three risks: a grant with an undisclosed link, a draft with missing information, and an upgrade that hides a way to drain funds. It all runs on a local chain with demo data. Nothing real moves, and you can click anything while the tour is open.",
   },
   {
     id: "chain",
-    route: "/",
+    route: "/overview",
     target: "eval-chain",
     title: "One question per stage",
     body: "The evaluation chain asks four questions in order. Each stage starts from a prior and is updated by the likelihood ratio of every piece of evidence found. All the factors are listed and the ratios are editable in Settings. The result is an estimate to direct attention, not a verdict.",

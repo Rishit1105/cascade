@@ -47,6 +47,14 @@ def audit_events(proposal: str | None = None, type: str | None = None, status: s
     return {"items": [audit.serialize(e) for e in items], "event_types": types}
 
 
+@router.get("/audit/verify-range")
+def verify_range(from_seq: int = Query(ge=1), to_seq: int = Query(ge=1), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Read-only: re-hashes the events between two ledger positions (used by timeline strings)."""
+    if abs(to_seq - from_seq) > 1000:
+        raise ValidationFailed("segment_too_long", "A segment can span at most 1000 events.")
+    return audit.verify_segment(db, from_seq, to_seq)
+
+
 @router.get("/proposals/{proposal_id}/audit-events")
 def proposal_audit(proposal_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     proposals.get_proposal(db, proposal_id)

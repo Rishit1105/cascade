@@ -29,6 +29,7 @@ log = logging.getLogger("daoguard")
 async def lifespan(_: FastAPI):
     create_all()
     bootstrap.start()
+    assistant.warm_up()
     yield
     bus.close()
     if runtime.sentinel is not None:

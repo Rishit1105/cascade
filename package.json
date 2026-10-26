@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "setup:ai": "node scripts/setup-ai.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "npm --prefix frontend run build",
     "test:contracts": "npm --prefix contracts test",

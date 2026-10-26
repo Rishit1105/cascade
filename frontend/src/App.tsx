@@ -13,6 +13,7 @@ import { Inspectors } from "./components/inspectors";
 import { Toasts } from "./components/overlays";
 import { EmptyState, LoadingBlock } from "./components/ui";
 
+const Landing = lazy(() => import("./pages/Landing"));
 const Overview = lazy(() => import("./pages/Overview"));
 const Proposals = lazy(() => import("./pages/Proposals"));
 const Relationships = lazy(() => import("./pages/Relationships"));
@@ -39,43 +40,54 @@ function Gate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** The DAOGuard workspace: everything behind the landing page. */
+function Workspace() {
+  return (
+    <AppProvider>
+      <Gate>
+        <LiveProvider>
+          <TourProvider>
+            <AssistantProvider>
+              <AppShell>
+                <Suspense fallback={<LoadingBlock rows={8} />}>
+                  <Routes>
+                    <Route path="/overview" element={<Overview />} />
+                    <Route path="/proposals" element={<Proposals />} />
+                    <Route path="/proposals/:id" element={<Proposals />} />
+                    <Route path="/relationships" element={<Relationships />} />
+                    <Route path="/versions" element={<Versions />} />
+                    <Route path="/financial" element={<Financial />} />
+                    <Route path="/voting" element={<Voting />} />
+                    <Route path="/guardian" element={<Guardian />} />
+                    <Route path="/audit" element={<AuditTimeline />} />
+                    <Route path="/escalation" element={<Escalation />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="*" element={<EmptyState title="Page not found" body="This route does not exist." action={<Link className="text-sm font-semibold text-primary" to="/overview">Back to overview</Link>} />} />
+                  </Routes>
+                </Suspense>
+              </AppShell>
+              <Inspectors />
+              <TourOverlay />
+            </AssistantProvider>
+          </TourProvider>
+        </LiveProvider>
+      </Gate>
+      <Toasts />
+    </AppProvider>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <QueryClientProvider client={queryClient}>
         <MotionProvider>
-        <AppProvider>
-          <Gate>
-            <LiveProvider>
-              <TourProvider>
-                <AssistantProvider>
-                  <AppShell>
-                    <Suspense fallback={<LoadingBlock rows={8} />}>
-                      <Routes>
-                        <Route path="/" element={<Overview />} />
-                        <Route path="/proposals" element={<Proposals />} />
-                        <Route path="/proposals/:id" element={<Proposals />} />
-                        <Route path="/relationships" element={<Relationships />} />
-                        <Route path="/versions" element={<Versions />} />
-                        <Route path="/financial" element={<Financial />} />
-                        <Route path="/voting" element={<Voting />} />
-                        <Route path="/guardian" element={<Guardian />} />
-                        <Route path="/audit" element={<AuditTimeline />} />
-                        <Route path="/escalation" element={<Escalation />} />
-                        <Route path="/reports" element={<Reports />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="*" element={<EmptyState title="Page not found" body="This route does not exist." action={<Link className="text-sm font-semibold text-primary" to="/">Back to overview</Link>} />} />
-                      </Routes>
-                    </Suspense>
-                  </AppShell>
-                  <Inspectors />
-                  <TourOverlay />
-                </AssistantProvider>
-              </TourProvider>
-            </LiveProvider>
-          </Gate>
-          <Toasts />
-        </AppProvider>
+          <Routes>
+            {/* The landing page needs no workspace state, so it renders at once, even while the chain boots. */}
+            <Route path="/" element={<Suspense fallback={<div className="min-h-screen bg-[#05080c]" />}><Landing /></Suspense>} />
+            <Route path="*" element={<Workspace />} />
+          </Routes>
         </MotionProvider>
       </QueryClientProvider>
     </BrowserRouter>
